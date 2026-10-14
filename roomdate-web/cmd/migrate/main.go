@@ -1,0 +1,191 @@
+// Applica le migrazioni SQL del database (internal/db/migrations).
+//
+//	go run ./cmd/migrate status     stato delle migrazioni
+//	go run ./cmd/migrate up         applica quelle mancanti
+//	go run ./cmd/migrate up-by-one  applica solo la prossima
+//	go run ./cmd/migrate down       annulla l'ultima
+//
+// Legge DATABASE_URL dall'ambiente o da .env.local. Con Neon usa sempre la connessione diretta
+// (toglie "-pooler" dall'host). Su un database non locale chiede conferma prima di modificarlo.
+//
+// Per la produzione indicare anche l'host atteso: se DATABASE_URL punta altrove non parte nulla.
+//
+//	go run ./cmd/migrate -host ep-floral-violet-aldznrms up
+//
+// Le migrazioni si eseguono con il ruolo proprietario dello schema (neondb_owner), non con quello
+// dell'applicazione, che può solo leggere e scrivere i dati. grant-app crea quel ruolo (se manca)
+// e gli assegna i permessi; alla creazione stampa la stringa di connessione da mettere su Vercel:
+//
+//	go run ./cmd/migrate -host ep-floral-violet-aldznrms grant-app roomdate_app
+//
+// grant-admin e revoke-admin nominano o tolgono un amministratore, che vede le segnalazioni e può
+// sospendere account o rimuovere annunci (modulo M3.3):
+//
+//	go run ./cmd/migrate -host ep-floral-violet-aldznrms grant-admin nome@esempio.it
+package main
+
+import (
+	"bufio"
+	"context"
+	"database/sql"
+	"errors"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"strings"
+
+	"roomdate-backend/internal/db"
+	"roomdate-backend/internal/devenv"
+)
+
+var writeCommands = map[string]bool{"up": true, "up-by-one": true, "down": true, "grant-app": true, "grant-admin": true, "revoke-admin": true}
+
+// Comandi che vogliono un argomento: il ruolo dell'app o l'email dell'amministratore.
+var argumentHelp = map[string]string{
+	"grant-app":    "Indica il ruolo dell'applicazione, es.: go run ./cmd/migrate grant-app roomdate_app",
+	"grant-admin":  "Indica l'email dell'account, es.: go run ./cmd/migrate grant-admin nome@esempio.it",
+	"revoke-admin": "Indica l'email dell'account, es.: go run ./cmd/migrate revoke-admin nome@esempio.it",
+}
+var readCommands = map[string]bool{"status": true, "version": true, "validate": true}
+
+func main() {
+	log.SetFlags(0)
+	yes := flag.Bool("yes", false, "non chiedere conferma sui database non locali")
+	envFile := flag.String("env", ".env.local", "file con le variabili d'ambiente")
+	expectedHost := flag.String("host", "", "host atteso del database, anche solo l'inizio (es. ep-floral-violet-aldznrms)")
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "Uso: go run ./cmd/migrate [-yes] [-env file] [-host host] status|version|validate|up|up-by-one|down")
+		fmt.Fprintln(os.Stderr, "     go run ./cmd/migrate [-yes] [-env file] [-host host] grant-app RUOLO")
+		fmt.Fprintln(os.Stderr, "     go run ./cmd/migrate [-yes] [-env file] [-host host] grant-admin|revoke-admin EMAIL")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	command := flag.Arg(0)
+	if command == "" {
+		command = "status"
+	}
+	if !writeCommands[command] && !readCommands[command] {
+		flag.Usage()
+		os.Exit(2)
+	}
+	if help, needed := argumentHelp[command]; needed && flag.Arg(1) == "" {
+		log.Fatal(help)
+	}
+
+	if _, err := devenv.Load(*envFile); err != nil {
+		log.Fatalf("Errore nel file %s: %v", *envFile, err)
+	}
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Fatal("DATABASE_URL non impostata: copia .env.example in .env.local e compilala")
+	}
+
+	ownerDSN := dsn
+	dsn, direct := devenv.DirectNeonDSN(dsn)
+	host, dbname := devenv.DescribeDSN(dsn)
+	role := devenv.DSNUser(dsn)
+	if role == "" {
+		role = "non indicato"
+	}
+	log.Printf("Database: %s / %s, ruolo %s", host, dbname, role) // #nosec G706 -- dal DATABASE_URL di chi avvia lo strumento
+	if direct {
+		log.Print("Uso la connessione diretta: tolto \"-pooler\" dall'host")
+	}
+	if *expectedHost != "" && !strings.HasPrefix(host, *expectedHost) {
+		log.Fatalf("DATABASE_URL non punta al database atteso (%s): nessuna operazione eseguita.", *expectedHost)
+	}
+
+	conn, err := db.OpenSQL(dsn)
+	if err != nil {
+		log.Fatalf("Connessione non valida: %v", err)
+	}
+	defer conn.Close()
+	if err := conn.Ping(); err != nil {
+		log.Fatalf("Database non raggiungibile: %v", err)
+	}
+
+	// Migrazioni e grant-app servono al ruolo proprietario: meglio saperlo prima della conferma
+	if command != "grant-admin" && command != "revoke-admin" {
+		var notMigrator *db.NotMigratorError
+		if err := db.CheckCanMigrate(context.Background(), conn); errors.As(err, &notMigrator) {
+			log.Fatalf("Il ruolo %s non può modificare il database: è quello dell'app (la stringa di Vercel). "+
+				"Per le migrazioni serve la stringa del proprietario: Neon → Connect → branch production → ruolo neondb_owner. "+
+				"Nessuna operazione eseguita.", notMigrator.Role)
+		} else if err != nil {
+			log.Fatalf("%v", err)
+		}
+	}
+
+	if writeCommands[command] && !devenv.IsLocalHost(host) && !*yes &&
+		!confirm(fmt.Sprintf("Eseguire \"%s\" su questo database NON locale? Prima crea un branch di backup su Neon.", command)) {
+		log.Fatal("Operazione annullata")
+	}
+
+	switch command {
+	case "grant-app":
+		grantApp(conn, ownerDSN, flag.Arg(1))
+		return
+	case "grant-admin", "revoke-admin":
+		setAdmin(conn, flag.Arg(1), command == "grant-admin")
+		return
+	}
+
+	if err := db.Migrate(context.Background(), conn, command); err != nil {
+		log.Fatalf("Migrazione fallita: %v", err)
+	}
+}
+
+// grantApp prepara il ruolo usato dall'app, con i soli permessi sui dati (modulo M3.6). La connessione
+// deve essere quella del ruolo proprietario, che fa le migrazioni.
+func grantApp(conn *sql.DB, ownerDSN, role string) {
+	password, err := db.SetupAppRole(context.Background(), conn, role)
+	if err != nil {
+		log.Fatalf("Ruolo non preparato, nessuna modifica: %v", err)
+	}
+	if password == "" {
+		log.Printf("Permessi di %q aggiornati: lettura e scrittura dei dati, nessuna modifica dello schema.", role)
+		return
+	}
+	log.Printf("Ruolo %q creato: può leggere e scrivere i dati, non modificare lo schema.", role)
+	fmt.Println()
+	if appDSN, ok := devenv.AppNeonDSN(ownerDSN, role, password); ok {
+		fmt.Println("Stringa di connessione dell'app, da copiare in Vercel → Settings → Environment Variables →")
+		fmt.Println("DATABASE_URL (Production). Contiene la password, che non è salvata da nessuna parte e non verrà")
+		fmt.Println("mostrata di nuovo: non incollarla in chat, email o documenti.")
+		fmt.Println()
+		fmt.Println(appDSN)
+	} else {
+		fmt.Println("Password del ruolo (non verrà mostrata di nuovo, non condividerla):")
+		fmt.Println()
+		fmt.Println(password)
+	}
+	fmt.Println()
+}
+
+// setAdmin nomina o toglie un amministratore, cercando l'account per email.
+func setAdmin(conn *sql.DB, email string, admin bool) {
+	var name string
+	err := conn.QueryRowContext(context.Background(), `
+        UPDATE roomdate_app.users SET is_admin = $2 WHERE lower(email) = lower(btrim($1))
+        RETURNING COALESCE(first_name, '')`, email, admin).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Fatalf("Nessun account con l'email %q: nessuna modifica.", email)
+	}
+	if err != nil {
+		log.Fatalf("Modifica non riuscita: %v", err)
+	}
+	if admin {
+		log.Printf("%s (%s) ora è amministratore: vede l'area Moderazione ricaricando la pagina.", name, email)
+	} else {
+		log.Printf("%s (%s) non è più amministratore.", name, email)
+	}
+}
+
+func confirm(question string) bool {
+	fmt.Printf("%s [s/N] ", question)
+	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	return answer == "s" || answer == "si" || answer == "sì"
+}

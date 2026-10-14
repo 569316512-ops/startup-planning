@@ -1,0 +1,487 @@
+package server_test
+
+// Test di integrazione: esercitano l'applicazione completa (rotte, middleware, servizi e query)
+// con httptest su un database PostgreSQL reale.
+//
+// Si attivano impostando TEST_DATABASE_URL (anche in .env.local), la connessione a un server
+// Postgres su cui l'utente può creare database. Per ogni esecuzione viene creato un database
+// temporaneo "roomdate_test_…", migrato da zero ed eliminato alla fine: il database indicato
+// nella stringa di connessione non viene mai modificato.
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
+
+	"roomdate-backend/internal/config"
+	"roomdate-backend/internal/db"
+	"roomdate-backend/internal/devenv"
+	"roomdate-backend/internal/storage"
+	"roomdate-backend/server"
+)
+
+// testPool è la connessione con tutti i permessi, per preparare i dati dei test.
+// appPool è quella dell'applicazione: un ruolo che può solo leggere e scrivere i dati, come in
+// produzione (modulo M3.6). Se all'app servisse un permesso in più, i test lo scoprirebbero.
+var testPool, appPool *pgxpool.Pool
+
+// appConfig è la configurazione di appPool, per creare pool con impostazioni di sessione diverse.
+var appConfig *pgxpool.Config
+
+func TestMain(m *testing.M) {
+	os.Exit(run(m))
+}
+
+func run(m *testing.M) int {
+	if root, ok := repoRoot(); ok {
+		devenv.Load(filepath.Join(root, ".env.local"))
+	}
+	adminURL := os.Getenv("TEST_DATABASE_URL")
+	if adminURL == "" {
+		fmt.Println("TEST_DATABASE_URL non impostata: i test di integrazione vengono saltati")
+		return m.Run()
+	}
+
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, adminURL)
+	if err != nil {
+		fmt.Println("connessione a TEST_DATABASE_URL fallita:", err)
+		return 1
+	}
+	defer admin.Close(ctx)
+
+	suffix := make([]byte, 4)
+	rand.Read(suffix)
+	name := "roomdate_test_" + hex.EncodeToString(suffix)
+	ident := pgx.Identifier{name}.Sanitize()
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+ident); err != nil {
+		fmt.Println("creazione del database di test fallita:", err)
+		return 1
+	}
+	// Ruolo dell'applicazione, creato più avanti. Va eliminato dopo il database: finché questo
+	// esiste, i permessi del ruolo su di esso ne impediscono l'eliminazione
+	role := "roomdate_app_" + hex.EncodeToString(suffix)
+	defer func() {
+		admin.Exec(ctx, "DROP DATABASE IF EXISTS "+ident+" WITH (FORCE)")
+		admin.Exec(ctx, "DROP ROLE IF EXISTS "+pgx.Identifier{role}.Sanitize())
+	}()
+
+	cfg, err := db.Config(adminURL)
+	if err != nil {
+		fmt.Println(err)
+		return 1
+	}
+	cfg.ConnConfig.Database = name
+
+	sqlDB := stdlib.OpenDB(*cfg.ConnConfig.Copy())
+	goose.SetLogger(goose.NopLogger())
+	err = db.Migrate(ctx, sqlDB, "up")
+	if err != nil {
+		sqlDB.Close()
+		fmt.Println("migrazioni fallite:", err)
+		return 1
+	}
+
+	// Ruolo dell'applicazione, creato come fa "migrate grant-app" e con i soli permessi sui dati
+	rolePassword, err := db.SetupAppRole(ctx, sqlDB, role)
+	sqlDB.Close()
+	if err != nil {
+		fmt.Println("ruolo dell'applicazione:", err)
+		return 1
+	}
+
+	testPool, err = pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		fmt.Println(err)
+		return 1
+	}
+	defer testPool.Close()
+
+	appCfg := cfg.Copy()
+	appCfg.ConnConfig.User = role
+	appCfg.ConnConfig.Password = rolePassword
+	appPool, err = pgxpool.NewWithConfig(ctx, appCfg)
+	if err != nil {
+		fmt.Println(err)
+		return 1
+	}
+	defer appPool.Close()
+	appConfig = appCfg
+
+	return m.Run()
+}
+
+func repoRoot() (string, bool) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
+}
+
+// --- Applicazione di test ---
+
+type event struct {
+	Channel string
+	Name    string
+	Data    any
+}
+
+// recordingPublisher registra gli eventi in tempo reale invece di inviarli.
+type recordingPublisher struct {
+	mu     sync.Mutex
+	events []event
+	fail   bool
+}
+
+func (p *recordingPublisher) Publish(_ context.Context, channel, name string, data any) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.fail {
+		return fmt.Errorf("pusher: 500 Internal Server Error (dettaglio interno)")
+	}
+	p.events = append(p.events, event{Channel: channel, Name: name, Data: data})
+	return nil
+}
+
+func (p *recordingPublisher) recorded() []event {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]event(nil), p.events...)
+}
+
+// fakeStorage è uno storage in memoria. PresignUpload registra il tipo firmato per la chiave:
+// put simula il browser che carica il file sull'URL firmato.
+type fakeStorage struct {
+	mu      sync.Mutex
+	signed  map[string]string // chiave → Content-Type firmato
+	objects map[string]fakeObject
+}
+
+type fakeObject struct {
+	contentType string
+	data        []byte
+}
+
+func newFakeStorage() *fakeStorage {
+	return &fakeStorage{signed: map[string]string{}, objects: map[string]fakeObject{}}
+}
+
+func (f *fakeStorage) PresignUpload(_ context.Context, key, contentType string, _ time.Duration) (storage.Upload, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.signed[key] = contentType
+	return storage.Upload{URL: "https://storage.test/upload/" + key, Headers: map[string]string{"Content-Type": contentType}}, nil
+}
+
+func (f *fakeStorage) put(key string, data []byte) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.objects[key] = fakeObject{contentType: f.signed[key], data: data}
+}
+
+func (f *fakeStorage) Stat(_ context.Context, key string) (storage.ObjectInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	obj, ok := f.objects[key]
+	if !ok {
+		return storage.ObjectInfo{}, storage.ErrNotFound
+	}
+	return storage.ObjectInfo{Size: int64(len(obj.data)), ContentType: obj.contentType}, nil
+}
+
+func (f *fakeStorage) ReadPrefix(_ context.Context, key string, n int) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	obj, ok := f.objects[key]
+	if !ok {
+		return nil, storage.ErrNotFound
+	}
+	return obj.data[:min(n, len(obj.data))], nil
+}
+
+func (f *fakeStorage) Move(_ context.Context, from, to string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	obj, ok := f.objects[from]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	f.objects[to] = obj
+	delete(f.objects, from)
+	return nil
+}
+
+func (f *fakeStorage) Delete(_ context.Context, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.objects, key)
+	return nil
+}
+
+func (f *fakeStorage) PublicURL(key string) string {
+	return "https://img.test/" + key
+}
+
+func (f *fakeStorage) keys() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	keys := make([]string, 0, len(f.objects))
+	for k := range f.objects {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+type testApp struct {
+	t         *testing.T
+	handler   http.Handler
+	publisher *recordingPublisher
+	storage   *fakeStorage
+}
+
+// newApp svuota il database e crea un'applicazione nuova, con uno storage delle foto in memoria.
+func newApp(t *testing.T) *testApp {
+	t.Helper()
+	fake := newFakeStorage()
+	app := newAppWithStorage(t, fake)
+	app.storage = fake
+	return app
+}
+
+// testPusher sono credenziali Pusher finte: servono a firmare le iscrizioni ai canali privati,
+// mentre gli eventi finiscono nel recordingPublisher.
+var testPusher = config.Pusher{AppID: "roomdate-test", Key: "chiave-pusher-di-test", Secret: "segreto-pusher-di-test"}
+
+// newAppWithStorage crea l'applicazione con lo storage indicato (ad esempio storage.Disabled{}).
+func newAppWithStorage(t *testing.T, st storage.Storage) *testApp {
+	t.Helper()
+	return newAppWithConfig(t, st, config.Config{SecretKey: "segreto-di-test", SecureCookies: true, Pusher: testPusher})
+}
+
+// newAppWithConfig crea l'applicazione con una configurazione diversa da quella dei test.
+func newAppWithConfig(t *testing.T, st storage.Storage, cfg config.Config) *testApp {
+	t.Helper()
+	return newAppWithPool(t, st, cfg, appPool)
+}
+
+// newAppInTimeZone è newApp con le connessioni dell'applicazione nel fuso orario indicato (come fa
+// Neon, che è in UTC): nessun calcolo sui giorni deve dipendere dal fuso della sessione.
+func newAppInTimeZone(t *testing.T, timeZone string) *testApp {
+	t.Helper()
+	if testPool == nil {
+		t.Skip("TEST_DATABASE_URL non impostata")
+	}
+	cfg := appConfig.Copy()
+	cfg.ConnConfig.RuntimeParams["timezone"] = timeZone
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	fake := newFakeStorage()
+	app := newAppWithPool(t, fake, config.Config{SecretKey: "segreto-di-test", SecureCookies: true, Pusher: testPusher}, pool)
+	app.storage = fake
+	return app
+}
+
+// newAppWithPool crea l'applicazione sul pool indicato; options modifica le dipendenze (es. Push).
+func newAppWithPool(t *testing.T, st storage.Storage, cfg config.Config, pool *pgxpool.Pool, options ...func(*server.Deps)) *testApp {
+	t.Helper()
+	if testPool == nil {
+		t.Skip("TEST_DATABASE_URL non impostata")
+	}
+	_, err := testPool.Exec(context.Background(),
+		`TRUNCATE roomdate_app.messages, roomdate_app.conversations, roomdate_app.listing_images, roomdate_app.listings,
+                  roomdate_app.sessions, roomdate_app.security_events, roomdate_app.users RESTART IDENTITY CASCADE`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	publisher := &recordingPublisher{}
+	deps := server.Deps{
+		Config:    cfg,
+		DB:        pool,
+		Publisher: publisher,
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Storage:   st,
+	}
+	for _, option := range options {
+		option(&deps)
+	}
+	handler, err := server.New(deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &testApp{t: t, handler: handler, publisher: publisher}
+}
+
+type option func(*http.Request)
+
+// I test usano i cookie sicuri, come in produzione: il nome ha il prefisso __Host-.
+const sessionCookieName = "__Host-roomdate_session"
+
+func withSession(cookie string) option {
+	return func(r *http.Request) {
+		if cookie != "" {
+			r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie})
+		}
+	}
+}
+
+func withHeader(key, value string) option {
+	return func(r *http.Request) { r.Header.Set(key, value) }
+}
+
+// do esegue una richiesta. body viene inviato come JSON, a meno che non sia già una stringa.
+func (a *testApp) do(method, path string, body any, opts ...option) *httptest.ResponseRecorder {
+	a.t.Helper()
+	var reader io.Reader
+	switch b := body.(type) {
+	case nil:
+	case string:
+		reader = strings.NewReader(b)
+	default:
+		encoded, err := json.Marshal(b)
+		if err != nil {
+			a.t.Fatal(err)
+		}
+		reader = bytes.NewReader(encoded)
+	}
+
+	req := httptest.NewRequest(method, "http://roomdate.test"+path, reader)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	for _, opt := range opts {
+		opt(req)
+	}
+	rec := httptest.NewRecorder()
+	a.handler.ServeHTTP(rec, req)
+	return rec
+}
+
+type user struct {
+	ID, Email, Password, Cookie string
+}
+
+// Dal modulo M3.4 il server non riceve la password ma una chiave ricavata dal browser:
+// nei test è un valore Base64 qualsiasi, perché il server la tratta come un'informazione opaca.
+var testPassword = b64("chiave-di-accesso-di-prova")
+
+// testKDF sono i parametri di derivazione dichiarati dal browser.
+func testKDF() map[string]any {
+	return map[string]any{"version": 2, "salt": b64("sale-di-prova-1234"), "iterations": 600000}
+}
+
+// registerUser registra un utente (con chiavi E2EE fittizie se withVault) ed esegue il login.
+func (a *testApp) registerUser(name, userType string, withVault bool) user {
+	a.t.Helper()
+	u := user{Email: strings.ToLower(name) + "@test.it", Password: testPassword}
+	rec := a.do(http.MethodPost, "/api/v1/auth/register", registration(name, u.Email, u.Password, userType, withVault))
+	if rec.Code != http.StatusCreated {
+		a.t.Fatalf("registrazione di %s: %d %s", name, rec.Code, rec.Body.String())
+	}
+	var created struct{ ID string }
+	decode(a.t, rec, &created)
+	u.ID = created.ID
+	u.Cookie = a.login(u.Email, u.Password)
+	return u
+}
+
+// registration restituisce il corpo di una registrazione valida.
+func registration(name, email, password, userType string, withVault bool) map[string]any {
+	body := map[string]any{
+		"firstName": name, "lastName": "Rossi", "email": email, "password": password,
+		"city": "Milano", "userType": userType, "birthdate": "1999-01-01", "budgetMax": 500,
+		"occupation": "studente", "bio": "ciao", "lifestyleTags": []string{"socievole"},
+		"kdf": testKDF(),
+	}
+	if withVault {
+		body["keys"] = map[string]string{
+			"publicKey": b64("PUB-" + name), "encryptedPrivateKey": b64("VAULT-" + name),
+			"cryptoSalt": b64("SALT"), "cryptoIv": b64("IV"),
+		}
+	}
+	return body
+}
+
+func (a *testApp) login(email, password string) string {
+	a.t.Helper()
+	rec := a.do(http.MethodPost, "/api/v1/auth/login", map[string]string{"email": email, "password": password})
+	if rec.Code != http.StatusOK {
+		a.t.Fatalf("login di %s: %d %s", email, rec.Code, rec.Body.String())
+	}
+	return sessionCookie(rec)
+}
+
+func sessionCookie(rec *httptest.ResponseRecorder) string {
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sessionCookieName {
+			return c.Value
+		}
+	}
+	return ""
+}
+
+func decode(t *testing.T, rec *httptest.ResponseRecorder, v any) {
+	t.Helper()
+	if err := json.Unmarshal(rec.Body.Bytes(), v); err != nil {
+		t.Fatalf("risposta non JSON (%d): %s", rec.Code, rec.Body.String())
+	}
+}
+
+func b64(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
+}
+
+// expect verifica stato e (se indicato) una parte del corpo della risposta.
+func expect(t *testing.T, rec *httptest.ResponseRecorder, status int, bodyContains string) {
+	t.Helper()
+	if rec.Code != status {
+		t.Fatalf("stato = %d, atteso %d (corpo: %s)", rec.Code, status, strings.TrimSpace(rec.Body.String()))
+	}
+	if bodyContains != "" && !strings.Contains(rec.Body.String(), bodyContains) {
+		t.Fatalf("il corpo %q non contiene %q", strings.TrimSpace(rec.Body.String()), bodyContains)
+	}
+}
+
+// expectNoLeak verifica che la risposta non contenga dettagli tecnici del database.
+func expectNoLeak(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	for _, fragment := range []string{"pq:", "SQLSTATE", "constraint", "violates", "syntax", "roomdate_app"} {
+		if strings.Contains(rec.Body.String(), fragment) {
+			t.Fatalf("la risposta contiene dettagli interni (%q): %s", fragment, rec.Body.String())
+		}
+	}
+}

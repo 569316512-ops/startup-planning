@@ -1,0 +1,154 @@
+// Package validate contiene le regole di validazione dei dati in ingresso e la normalizzazione del testo.
+package validate
+
+import (
+	"encoding/base64"
+	"net/mail"
+	"strconv"
+	"strings"
+	"time"
+	// Il database dei fusi orari dentro il binario: su Vercel il sistema potrebbe non averlo
+	_ "time/tzdata"
+	"unicode"
+	"unicode/utf8"
+
+	"roomdate-backend/internal/apperr"
+)
+
+// Validator accumula gli errori di validazione di una richiesta.
+type Validator struct {
+	fields []apperr.FieldError
+}
+
+// Check registra un errore sul campo se la condizione è falsa.
+func (v *Validator) Check(ok bool, field, message string) {
+	if !ok {
+		v.fields = append(v.fields, apperr.FieldError{Field: field, Message: message})
+	}
+}
+
+// Err restituisce nil se è tutto valido, altrimenti un errore 400 con il primo messaggio
+// (e l'elenco completo dei campi, per le API che lo mostrano).
+func (v *Validator) Err() error {
+	if len(v.fields) == 0 {
+		return nil
+	}
+	return &apperr.Error{
+		Status:  400,
+		Code:    "validation_failed",
+		Message: v.fields[0].Message,
+		Fields:  v.fields,
+	}
+}
+
+// Text normalizza un testo scritto dall'utente: toglie gli spazi iniziali e finali e i caratteri
+// di controllo invisibili (tranne a capo e tabulazione), ma lo conserva così come è stato scritto,
+// compresi "<", ">" e "&". Non serve rimuovere l'HTML: React fa l'escape quando mostra il testo.
+func Text(s string) string {
+	s = strings.ToValidUTF8(s, "")
+	s = strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\t' {
+			return r
+		}
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+	return strings.TrimSpace(s)
+}
+
+// NotBlank indica se la stringa contiene almeno un carattere diverso da spazio.
+func NotBlank(s string) bool {
+	return strings.TrimSpace(s) != ""
+}
+
+// MaxLen indica se la stringa ha al massimo n caratteri.
+func MaxLen(s string, n int) bool {
+	return utf8.RuneCountInString(s) <= n
+}
+
+// OneOf indica se la stringa è uno dei valori ammessi.
+func OneOf(s string, options ...string) bool {
+	for _, option := range options {
+		if s == option {
+			return true
+		}
+	}
+	return false
+}
+
+// Between indica se n è compreso tra min e max (inclusi).
+func Between(n, min, max int) bool {
+	return n >= min && n <= max
+}
+
+// Email indica se la stringa è un indirizzo email semplice (senza nome visualizzato).
+func Email(s string) bool {
+	if len(s) > 254 {
+		return false
+	}
+	addr, err := mail.ParseAddress(s)
+	return err == nil && addr.Address == s
+}
+
+// Base64 indica se la stringa è Base64 standard valido e non supera maxLen caratteri.
+func Base64(s string, maxLen int) bool {
+	if len(s) > maxLen {
+		return false
+	}
+	_, err := base64.StdEncoding.DecodeString(s)
+	return err == nil
+}
+
+// Italy è il fuso con cui si contano i giorni del calendario (età, date nel passato): il sito è
+// italiano, mentre su Vercel l'ora del server è UTC, un'ora indietro d'inverno e due d'estate.
+var Italy = mustLoadLocation("Europe/Rome")
+
+func mustLoadLocation(name string) *time.Location {
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		panic(err) // non succede: time/tzdata contiene tutti i fusi
+	}
+	return loc
+}
+
+// Today è la data di oggi in Italia, a mezzanotte UTC: si confronta direttamente con le date
+// AAAA-MM-GG lette con time.Parse(time.DateOnly, ...).
+func Today(now time.Time) time.Time {
+	y, m, d := now.In(Italy).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+
+// PastDate indica se la stringa è una data AAAA-MM-GG non futura (in Italia) e non precedente al 1900.
+func PastDate(s string, now time.Time) bool {
+	t, err := time.Parse(time.DateOnly, s)
+	return err == nil && t.Year() >= 1900 && !t.After(Today(now))
+}
+
+// AgeAtLeast indica se chi è nato nella data AAAA-MM-GG ha già compiuto years anni all'istante now,
+// secondo il calendario italiano. Chi è nato il 29 febbraio li compie il 1° marzo negli anni non bisestili.
+func AgeAtLeast(birthdate string, now time.Time, years int) bool {
+	t, err := time.Parse(time.DateOnly, birthdate)
+	if err != nil {
+		return false
+	}
+	today := Today(now)
+	age := today.Year() - t.Year()
+	if today.Month() < t.Month() || (today.Month() == t.Month() && today.Day() < t.Day()) {
+		age--
+	}
+	return age >= years
+}
+
+// DateBetween indica se la stringa è una data AAAA-MM-GG compresa tra min e max (inclusi).
+func DateBetween(s string, min, max time.Time) bool {
+	t, err := time.Parse(time.DateOnly, s)
+	return err == nil && !t.Before(min) && !t.After(max)
+}
+
+// PositiveID converte un ID numerico positivo (es. il parametro ?id= di un annuncio).
+func PositiveID(s string) (int, bool) {
+	n, err := strconv.Atoi(s)
+	return n, err == nil && n > 0
+}

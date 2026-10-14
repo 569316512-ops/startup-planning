@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#fafaf9" />
+    <!-- Tema chiaro o scuro prima del primo disegno (file a parte: la CSP vieta gli script inline) -->
+    <script src="/theme.js"></script>
+    <!-- Qui il plugin "boot" di vite.config.js aggiunge src/boot.ts: dati e foto della pagina chiesti
+         subito, mentre l'app si scarica ancora (src/api/early.ts) -->
+
+    <!-- Titolo per chi non esegue JavaScript; poi ogni pagina mette titolo, descrizione, indirizzo
+         canonico e, se privata, noindex (src/components/PageMeta.tsx) -->
+    <title>RoomDate — Stanze in affitto e coinquilini</title>
+    <meta name="google-site-verification" content="9F81C9YLmIK7AZ5CilHQPIDPTdA_BNFKkfsdcFG6ijw" />
+
+    <!-- Anteprima dei link condivisi: i programmi di social e chat non eseguono JavaScript. Per gli
+         annunci l'anteprima con titolo, prezzo e foto la fa il server (vercel.json, internal/seo) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="RoomDate" />
+    <meta property="og:locale" content="it_IT" />
+    <meta property="og:title" content="RoomDate — Stanze in affitto e coinquilini" />
+    <meta property="og:description" content="Cerca stanze in affitto e coinquilini e scrivi direttamente a chi ti interessa, in una chat cifrata." />
+    <meta property="og:image" content="https://roomdate.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="RoomDate: stanze in affitto e coinquilini" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="96x96" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- App installabile (modulo M2.8): nome, icone e colori in public/manifest.webmanifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-title" content="RoomDate" />
+
+    <!-- Dati strutturati: il sito e chi lo pubblica -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://roomdate.vercel.app/#sito",
+            "name": "RoomDate",
+            "url": "https://roomdate.vercel.app/",
+            "inLanguage": "it-IT",
+            "description": "Stanze in affitto e coinquilini in Italia, con contatto diretto in una chat cifrata.",
+            "publisher": { "@id": "https://roomdate.vercel.app/#organizzazione" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://roomdate.vercel.app/#organizzazione",
+            "name": "RoomDate",
+            "url": "https://roomdate.vercel.app/",
+            "logo": "https://roomdate.vercel.app/icons/icon-512.png"
+          }
+        ]
+      }
+    </script>
+    <!-- Stili del caricatore: niente <style> nella pagina, la CSP non li ammette -->
+    <link rel="stylesheet" href="/src/loader.css" />
+  </head>
+  <body>
+    <div id="root">
+      <!-- Caricatore, finché React non sostituisce il contenuto di #root (stili in src/loader.css) -->
+      <div class="roomdate-loader-container">
+        <div class="roomdate-spinner"></div>
+        <div class="roomdate-logo">Room<span>Date</span></div>
+      </div>
+    </div>
+    <noscript>
+      <main class="roomdate-noscript">
+        <h1>RoomDate</h1>
+        <p>Stanze in affitto e coinquilini, con contatto diretto in una chat cifrata. Per usare il sito attiva JavaScript nel browser.</p>
+      </main>
+    </noscript>
+
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

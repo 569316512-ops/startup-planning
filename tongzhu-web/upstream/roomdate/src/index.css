@@ -1,0 +1,268 @@
+@import 'tailwindcss';
+
+/*
+  Design system di RoomDate (modulo M2.1). I colori sono token con un nome che dice a cosa servono
+  (sfondo, testo, azione principale...), non che colore sono: le pagine usano bg-surface,
+  text-foreground-muted, bg-primary, e il tema scuro cambia solo i valori qui sotto.
+
+  - Neutri caldi (stone) e un arancio profondo per le azioni; il gradiente arancio-rosa
+    (bg-brand) è riservato ai momenti di marchio, come logo e intestazioni.
+  - Contrasti verificati (WCAG 2.2 AA): testo almeno 4.5:1 sul suo sfondo, bordi dei campi e
+    anello di focus almeno 3:1.
+  - Spaziatura sulla griglia di 4px di Tailwind, tre raggi (control, card, pill = rounded-full)
+    e due ombre (card, overlay).
+  - Tema scuro "notte prugna": grafite tinta di viola caldo, non nero, che si sposa con il
+    gradiente arancio-rosa. Si attiva con la classe .dark su <html> (public/theme.js la mette prima
+    del primo disegno); la classe .light riporta al tema chiaro un pezzo di pagina (vetrina).
+*/
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root,
+.light {
+  --background: #fafaf9;
+  --surface: #ffffff;
+  --surface-muted: #f5f5f4;
+  --foreground: #1c1917;
+  --foreground-muted: #57534e;
+  /* Almeno 4.5:1 anche su surface-muted (le scritte "Nessuna foto", le schede non attive) */
+  --foreground-subtle: #736c67;
+  /* Bordi decorativi (card, separatori) e bordi dei campi, che devono distinguersi (3:1) */
+  --line: #e7e5e4;
+  --control: #908a84;
+  --primary: #c2410c;
+  --primary-hover: #9a3412;
+  --primary-foreground: #ffffff;
+  --primary-soft: #fff7ed;
+  --primary-soft-foreground: #9a3412;
+  --danger: #b91c1c;
+  --danger-hover: #991b1b;
+  --danger-foreground: #ffffff;
+  --danger-soft: #fef2f2;
+  --danger-soft-foreground: #991b1b;
+  --success-soft: #f0fdf4;
+  --success-soft-foreground: #166534;
+  --warning-soft: #fffbeb;
+  --warning-soft-foreground: #92400e;
+  --focus: #ea580c;
+  --overlay: rgb(28 25 23 / 0.45);
+  --brand-from: #f97316;
+  --brand-to: #f43f5e;
+  /* Stesso gradiente, più profondo: sotto il testo bianco (almeno 5.1:1 in ogni punto) */
+  --brand-deep-from: #c2410c;
+  --brand-deep-to: #be123c;
+  /* Colore delle ombre: al buio servono più scure per staccare le card dallo sfondo */
+  --shadow-tint: 28 25 23;
+  --shadow-strength: 1;
+  /* Piè di pagina: scuro in entrambi i temi, per chiudere la pagina */
+  --footer: #1c1917;
+  --footer-line: #292524;
+  color-scheme: light;
+}
+
+.dark {
+  /* Notte prugna: scuro ma non nero (luminanza dello sfondo 0.010, tra il nero e il "Dim" di
+     Twitter). Tutte le coppie testo/sfondo verificate: almeno 4.5:1, bordi dei campi e focus 3:1. */
+  --background: #1c1824;
+  --surface: #26212f;
+  --surface-muted: #322b3c;
+  --foreground: #f4eee8;
+  --foreground-muted: #c3b9cc;
+  --foreground-subtle: #a397b1;
+  --line: #3f374b;
+  --control: #8a7f99;
+  /* Al buio le azioni sono arancio chiaro con il testo scuro: il bianco sull'arancio non arriva a 3:1 */
+  --primary: #fb923c;
+  --primary-hover: #fdba74;
+  --primary-foreground: #1c1824;
+  --primary-soft: #3d2622;
+  --primary-soft-foreground: #fdba74;
+  --danger: #f87171;
+  --danger-hover: #fca5a5;
+  --danger-foreground: #1c1824;
+  --danger-soft: #3e1f2a;
+  --danger-soft-foreground: #fecdd3;
+  --success-soft: #1b3329;
+  --success-soft-foreground: #a7f3d0;
+  --warning-soft: #3a2d18;
+  --warning-soft-foreground: #fde68a;
+  --focus: #fdba74;
+  --overlay: rgb(12 9 16 / 0.65);
+  --shadow-tint: 8 6 12;
+  --shadow-strength: 3;
+  --footer: #141019;
+  --footer-line: #2a2433;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+  --color-line: var(--line);
+  --color-control: var(--control);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-soft-foreground: var(--danger-soft-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-foreground: var(--success-soft-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-soft-foreground: var(--warning-soft-foreground);
+  --color-focus: var(--focus);
+  --color-overlay: var(--overlay);
+  --color-footer: var(--footer);
+  --color-footer-line: var(--footer-line);
+}
+
+@theme {
+  /* Font ospitati sul sito (Fontsource, importati in main.jsx): nessuna richiesta a Google */
+  --font-sans: 'DM Sans Variable', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+  --font-serif: 'Playfair Display Variable', ui-serif, Georgia, serif;
+  /* Il carattere dei titoli e del logo */
+  --font-display: 'Playfair Display Variable', ui-serif, Georgia, serif;
+
+  --radius-control: 1rem;
+  --radius-card: 1.5rem;
+
+  --shadow-card: 0 1px 2px rgb(var(--shadow-tint) / calc(0.05 * var(--shadow-strength))), 0 1px 3px rgb(var(--shadow-tint) / calc(0.08 * var(--shadow-strength)));
+  --shadow-overlay: 0 16px 40px -12px rgb(var(--shadow-tint) / calc(0.35 * var(--shadow-strength)));
+
+  /* Animazioni brevi (150-250ms); con "riduci movimento" si spengono (vedi in fondo) */
+  --animate-fade-in: fade-in 200ms ease-out;
+  --animate-dialog-in: dialog-in 200ms ease-out;
+  --animate-sheet-in-right: sheet-in-right 250ms ease-out;
+  --animate-sheet-in-bottom: sheet-in-bottom 250ms ease-out;
+  --animate-fade-in-up: fadeInUp 0.8s ease-out forwards;
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  /* "Sta scrivendo": a riposo i puntini restano visibili, anche con "riduci movimento" */
+  --animate-typing: typing 1.2s ease-in-out infinite;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+  }
+  @keyframes sheet-in-right {
+    from {
+      transform: translateX(100%);
+    }
+  }
+  @keyframes sheet-in-bottom {
+    from {
+      transform: translateY(100%);
+    }
+  }
+  @keyframes typing {
+    0%,
+    60%,
+    100% {
+      opacity: 0.45;
+      transform: translateY(0);
+    }
+    30% {
+      opacity: 1;
+      transform: translateY(-3px);
+    }
+  }
+  @keyframes fadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* Gradiente del marchio, solo per logo, intestazioni e inviti principali */
+@utility bg-brand {
+  background-image: linear-gradient(135deg, var(--brand-from), var(--brand-to));
+}
+
+/* Il gradiente del marchio per i pannelli con testo bianco: bg-brand con il bianco non arriva a 3:1 */
+@utility bg-brand-deep {
+  background-image: linear-gradient(135deg, var(--brand-deep-from), var(--brand-deep-to));
+}
+
+@layer base {
+  /*
+    Compatibilità con Tailwind v3, per le pagine non ancora ridisegnate: bordi chiari
+    predefiniti (in v4 sono del colore del testo), mano sui pulsanti, placeholder tenui. Colori dai
+    token, così seguono il tema.
+  */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--line, currentcolor);
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--foreground-subtle);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+  }
+
+  /*
+    WCAG 2.4.11 (focus non coperto): quando il browser scorre per mostrare un elemento (Tab, ancore),
+    lo lascia fuori dalla barra in alto e, sul telefono, da quella in basso (navigazione o
+    "Contatta", alta al massimo 4,5 rem).
+  */
+  html {
+    scroll-padding-top: calc(4rem + env(safe-area-inset-top) + 0.5rem);
+    scroll-padding-bottom: calc(4.5rem + env(safe-area-inset-bottom) + 0.5rem);
+  }
+
+  @media (min-width: 768px) {
+    html {
+      scroll-padding-bottom: 0.5rem;
+    }
+  }
+}
+
+/* Cambio di tema: tutti i colori cambiano insieme, senza le transizioni dei singoli elementi */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

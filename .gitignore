@@ -1,0 +1,20 @@
+# Local dependencies, generated files and tool state
+node_modules/
+.next/
+.vinext/
+.wrangler/
+.sites-runtime/
+*.tsbuildinfo
+
+# Private runtime configuration; retain example files
+.env
+.env.*
+!.env.example
+!.env.*.example
+.dev.vars
+.dev.vars.*
+*.pem
+*.key
+
+# Nested repository metadata stays local
+**/.git/

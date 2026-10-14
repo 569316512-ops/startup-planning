@@ -7,11 +7,15 @@ export const AMENITIES = ['独立卧室','独立卫浴','家具齐全','电梯',
 export const STATES: Record<HousingState,string> = { rented:'已租好 · 招室友',teamup:'看好房 · 一起租',landlord:'房东直租',agent:'中介房源' };
 export interface Profile {
  id:string;firstName:string;age:number;gender:string;occupation:string;city:string;district:string;budgetMax:number;bio:string;lifestyleTags:string[];avatar:string;moveIn:string;leaseMonths:number;isPublic:boolean;userType:string;verified:boolean;demo:boolean;
+ workSchedule?:string;sleepSchedule?:string;cookingFrequency?:string;cleaningFrequency?:string;petSituation?:string;guestPreference?:string;roommateExpectations?:string;housingPreferences?:string;
 }
 export interface Post {
  id:string;ownerId:string;kind:Kind;status:string;title:string;city:string;district:string;price:number;totalRent:number;bedrooms:number;bathrooms:number;area:number;location:string;roomType:string;housingState:HousingState;availableFrom:string;leaseMonths:number;description:string;amenities:string[];lifestyleTags:string[];images:string[];originalLayout:boolean;billsIncluded:boolean;preferredGender:string;roommatesNeeded:number;lat:number;lng:number;contactPublic:boolean;createdAt:string;owner:Profile;saved:boolean;interested:boolean;interestCount:number;compatibility:Compatibility|null;promoted:boolean;demo:boolean;
+ nearestTransit?:string;nearbyFacilities?:string[];coRentalRules?:string;
 }
 export interface Filters {kind:string;district:string;maxPrice:string;bedrooms:string;housingState:string;tag:string;q:string;sort:string;}
 export const EMPTY_FILTERS: Filters={kind:'all',district:'全部区域',maxPrice:'',bedrooms:'',housingState:'',tag:'',q:'',sort:'recent'};
 export function money(n:number){return new Intl.NumberFormat('zh-CN').format(n);}
 export function dateLabel(d:string){if(!d)return '入住时间可协商';const now=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});return d<=now?'随时入住':`${Number(d.slice(5,7))}月${Number(d.slice(8,10))}日入住`;}
+export function locationLabel(post:Pick<Post,'district'|'location'>){const location=(post.location||'').trim().replace(/^贵阳(?:市)?[·\s-]*/,'').replace(new RegExp(`^${post.district}[·\\s-]*`),'');return `${post.district}·${location||'大致位置待沟通'}`;}
+export function amapSearchUrl(post:Pick<Post,'district'|'location'>){return `https://uri.amap.com/search?keyword=${encodeURIComponent(`贵阳市${post.district}${post.location||''}`)}&city=贵阳&src=yiqizu&callnative=0`;}

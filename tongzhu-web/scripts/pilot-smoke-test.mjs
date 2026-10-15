@@ -12,7 +12,7 @@ await call('events','POST',event);await call('events','POST',event);
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
 async function upload(token=receiptToken,{consent=true,bytes=png,type='image/png',expected=201}={}){const f=new FormData();f.append('file',new File([bytes],'test.png',{type}));f.append('receiptToken',token);f.append('sessionId',sessionId);f.append('adult','true');f.append('consent',String(consent));const r=await fetch(origin+'/api/v1/pilot/uploads',{method:'POST',body:f});const d=await r.json();assert.equal(r.status,expected,JSON.stringify(d));return d;}
 await upload(crypto.randomUUID(),{consent:false,expected:400});await upload(crypto.randomUUID(),{bytes:Buffer.from('not-a-photo'),expected:400});
-const image=await upload();lead.photoIds=[image.id];
+const image=await upload(),secondImage=await upload();lead.photoIds=[image.id,secondImage.id];
 await call('photos/'+image.id,'GET',null,403);
 assert.equal((await fetch(origin+'/api/v1/uploads/pilot/'+createHash('sha256').update(receiptToken).digest('hex')+'/'+image.id)).status,404);
 assert.equal((await fetch(origin+'/api/v1/pilot/photos/'+image.id,{headers:{'x-pilot-receipt':receiptToken}})).status,200);
@@ -23,7 +23,7 @@ await call('leads','POST',{...lead,kind:'room'},400);
 const created=await call('leads','POST',lead,201);
 try{
  const again=await call('leads','POST',lead);assert.equal(again.id,created.id);assert.equal(again.duplicate,true);
- const admin=await call('admin','GET',null,200,operator);const row=admin.leads.find(x=>x.id===created.id);assert.equal(row.contact_value,'local_test_only');assert.equal(row.contact_type,'wechat');assert.deepEqual(JSON.parse(row.photo_ids),[image.id]);assert.equal(admin.sources.some(x=>x.source==='test'),false);
+ const admin=await call('admin','GET',null,200,operator);const row=admin.leads.find(x=>x.id===created.id);assert.equal(row.contact_value,'local_test_only');assert.equal(row.contact_type,'wechat');assert.deepEqual(JSON.parse(row.photo_ids),[image.id,secondImage.id]);assert.equal(admin.sources.some(x=>x.source==='test'),false);
  await call(`leads/${created.id}`,'PUT',{status:'contacted'},200,operator);
  assert.equal((await call('admin','GET',null,200,operator)).leads.find(x=>x.id===created.id).status,'contacted');
  await call('admin','GET',null,403);await call(`leads/${created.id}`,'GET',null,404);await call(`leads/${created.id}`,'PUT',{status:'matched'},403);
@@ -36,6 +36,7 @@ try{
 }finally{await call(`leads/${created.id}`,'DELETE',{receiptToken});}
 assert.equal((await call('admin','GET',null,200,operator)).leads.some(x=>x.id===created.id),false);
 assert.equal((await fetch(origin+'/api/v1/pilot/photos/'+image.id,{headers:{'x-pilot-receipt':receiptToken}})).status,404);
+assert.equal((await fetch(origin+'/api/v1/pilot/photos/'+secondImage.id,{headers:{'x-pilot-receipt':receiptToken}})).status,404);
 const roomToken=crypto.randomUUID(),roomPhotos=[];for(let i=0;i<7;i++)roomPhotos.push(await upload(roomToken));const housing={community:'本地虚构小区',housingState:'rented',bedrooms:2,bathrooms:1,area:89,roomsAvailable:1,originalLayout:true,amenities:['电梯','可做饭','投影仪']};const room={...lead,kind:'room',housing,receiptToken:roomToken,photoIds:roomPhotos.map(photo=>photo.id)};
 await call('leads','POST',{...room,housing:{...housing,originalLayout:false}},400);
 await call('leads','POST',{...room,housing:{...housing,area:0}},400);

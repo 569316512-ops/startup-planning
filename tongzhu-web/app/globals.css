@@ -62,5 +62,6 @@ img{font-size:0}.gallery,.card-image,.hero-room{background:linear-gradient(135de
 .card-location-overlay svg{display:block;flex-shrink:0}
 .profile-panel .field>label::after,.profile-panel .field>span::after,.publish-form .field>label::after,.publish-form .field>span::after{content:' *';color:#d85b61;font-weight:700}
 
-/* Detail feedback: reduce preference content by 30%, retaining label sizes. */
-.detail-page .preference-copy>span{font-size:.7em}
+/* Detail feedback: preference content increased 15% from the previous size. */
+.detail-page .preference-copy>span{font-size:.805em}
+.detail-sidebar .contact-card>.btn{font-size:14.4px}

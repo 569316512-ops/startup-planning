@@ -16,6 +16,10 @@
 
 本轮新增手机独立设计，详见 `validation/mobile-design-2026-10-15.md`。700px 以下启用 `components/mobile-discovery.tsx` 与 `app/mobile.css`，PC 原布局保留。手机首页双列卡片、底部导航；详情照片与分块信息、底部联系；表单单列联系方式和独立内容滚动。360/390/430 宽度与 1280/1440 PC 排版检查通过，真实手机键盘/微信仍需实测。
 
+**手机新版尚未发布到生产**：代码已推送 GitHub（`de8aa8b`）；Sites 源提交已推送为 `6f7f04e8b9ea86378e13f7cef90e329d933b87d8`。保存版本时原路径两次、ASCII 临时路径一次均在文件上传阶段失败（OpenAI blob upload error sending request），未返回 saved version ID，未启动部署。线上仍为上次公开版。不要将此前公开发布成功记录理解为本次手机版已上线。
+
+重试材料：`.sites-runtime/yiqizu-mobile-redesign.tar.gz`，镜像副本 `C:/Users/1/AppData/Local/Temp/yiqizu-mobile-redesign.tar.gz`；包必须继续匹配上述 Sites 源提交。站点当前 public，恢复后用 save_site_version + deploy_site_version；不应使用 private 部署或重复创建站点。本地新版截图位于 `validation/mobile-redesign-2026-10-15/`，为浏览器模拟验收而非真机证据。
+
 用户确认首轮按贵阳市准备，保留八城入口；验证方法需能复用于其他产品。
 
 - 已于本轮公开发布，普通访客无需平台登录。Sites 源提交 `a9f7b96afac1c2c8152536d987967ea702f81434`，部署 `appgdep_6ad047e207c8819182953cea7a0e4e37` 成功，环境修订 1。后续部署应按公开站点流程执行。

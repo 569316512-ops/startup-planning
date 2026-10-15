@@ -39,6 +39,8 @@ assert.equal((await fetch(origin+'/api/v1/pilot/photos/'+image.id,{headers:{'x-p
 const roomToken=crypto.randomUUID(),roomPhotos=[];for(let i=0;i<7;i++)roomPhotos.push(await upload(roomToken));const housing={community:'本地虚构小区',housingState:'rented',bedrooms:2,bathrooms:1,area:89,roomsAvailable:1,originalLayout:true,amenities:['电梯','可做饭','投影仪']};const room={...lead,kind:'room',housing,receiptToken:roomToken,photoIds:roomPhotos.map(photo=>photo.id)};
 await call('leads','POST',{...room,housing:{...housing,originalLayout:false}},400);
 await call('leads','POST',{...room,housing:{...housing,area:0}},400);
+await call('leads','POST',{...room,housing:{...housing,amenities:[]}},400);
+await call('leads','POST',{...room,nickname:' '},400);
 await call('leads','POST',{...room,housing:{...housing,roomsAvailable:3}},400);
 const r=await call('leads','POST',room,201);try{const saved=(await call('admin','GET',null,200,operator)).leads.find(x=>x.id===r.id);assert.deepEqual({...JSON.parse(saved.housing),amenities:[...JSON.parse(saved.housing).amenities].sort()},{...housing,amenities:[...housing.amenities].sort()});assert.deepEqual(JSON.parse(saved.photo_ids),roomPhotos.map(photo=>photo.id));const res=await fetch(origin+'/api/v1/pilot/photos/'+roomPhotos[0].id,{headers:operator});assert.equal(res.status,200);assert.equal(res.headers.get('content-type'),'image/png');}finally{await call(`leads/${r.id}`,'DELETE',{receiptToken:roomToken});}
 for(const photo of roomPhotos)assert.equal((await fetch(origin+'/api/v1/pilot/photos/'+photo.id,{headers:operator})).status,404);

@@ -17,6 +17,30 @@ const post=await a('listings','POST',room,201);
 const seekers=await b('listings','POST',{...room,kind:'seeker',title:'我在观山湖找原户型合租的住处',images:[photoB]},201);
 const publicFeed=await stranger('listings?demo=0&kind=room&district=观山湖区&maxPrice=1300');assert(publicFeed.items.some(x=>x.id===post.id));
 await b(`listings/${post.id}`,'PUT',{status:'paused'},403);
+// Eight-city persistence, city/area validation and cross-city isolation.
+const cities=[['上海','浦东新区'],['北京','朝阳区'],['深圳','南山区'],['杭州','西湖区'],['广州','天河区'],['成都','武侯区'],['重庆','两江新区'],['贵阳','观山湖区']];
+for(const [city,district] of cities){
+ const published=await a('listings','POST',{...room,city,district,title:`${city}多城发布回归测试`},201);
+ try {
+  assert.equal(published.city,city);assert.equal(published.district,district);
+  const feed=await stranger(`listings?demo=0&city=${encodeURIComponent(city)}`);
+  assert(feed.items.some(x=>x.id===published.id));assert(feed.items.every(x=>x.city===city));
+  const other=city==='贵阳'?'上海':'贵阳';
+  const excluded=await stranger(`listings?demo=0&city=${encodeURIComponent(other)}`);
+  assert(!excluded.items.some(x=>x.id===published.id));
+ } finally {await a(`listings/${published.id}`,'DELETE');}
+}
+await a('listings','POST',{...room,city:'北京',district:'观山湖区'},400);
+await a('listings','POST',{...room,city:'南京'},400);
+const moved=await a(`listings/${post.id}`,'PUT',{...room,city:'重庆',district:'两江新区'});
+assert.equal(moved.city,'重庆');assert.equal((await stranger('listings?city=重庆&demo=0')).items.some(x=>x.id===post.id),true);
+await a(`listings/${post.id}`,'PUT',{...room,city:'贵阳'});
+const updatedProfile=await a('me','PUT',{...base,city:'重庆',district:'两江新区',avatar:photoA,contact:{phone:'13800000000',wechat:'local_check_only',visible:true}});
+assert.equal(updatedProfile.city,'重庆');
+await a('me','PUT',{...base,city:'北京',district:'观山湖区',avatar:photoA,contact:{phone:'13800000000',wechat:'local_check_only',visible:true}},400);
+await a('me','PUT',{...base,city:'贵阳',avatar:photoA,contact:{phone:'13800000000',wechat:'local_check_only',visible:true}});
+const demos=await stranger('listings?city=重庆');assert(demos.items.every(x=>x.city==='重庆'));
+console.log('PASS: 八城发布、城市持久化、城市/区县校验、跨城筛选、编辑迁城、资料切城、演示数据隔离。');
 await b(`listings/${post.id}/interest`,'POST');await b(`listings/${post.id}/interest`,'POST');
 let detail=await b(`listings/${post.id}`);assert.equal(detail.interestCount,1);assert(detail.interested);assert(detail.interests.some(x=>x.id===q.id));
 await b(`me/saved-listings/${post.id}`,'PUT');const saved=await b('listings?saved=1&demo=0');assert(saved.items.some(x=>x.id===post.id));

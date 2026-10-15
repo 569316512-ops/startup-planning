@@ -43,6 +43,9 @@
   "exclude": [
     "node_modules",
     "examples",
-    "upstream"
+    "upstream",
+    ".sites-runtime",
+    ".wrangler",
+    "dist"
   ]
 }

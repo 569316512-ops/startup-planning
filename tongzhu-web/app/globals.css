@@ -68,3 +68,5 @@ img{font-size:0}.gallery,.card-image,.hero-room{background:linear-gradient(135de
 
 /* Detail rental description and co-rental rules: 10% smaller body text. */
 .detail-page .description{font-size:17.55px}
+
+.city-picker select{max-width:105px;border:0!important;padding:4px!important;background:transparent!important}.search-city select{min-width:90px;font-size:18px;padding:4px!important;border:0!important;background:transparent!important}

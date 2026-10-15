@@ -16,9 +16,9 @@
 
 本轮新增手机独立设计，详见 `validation/mobile-design-2026-10-15.md`。700px 以下启用 `components/mobile-discovery.tsx` 与 `app/mobile.css`，PC 原布局保留。手机首页双列卡片、底部导航；详情照片与分块信息、底部联系；表单单列联系方式和独立内容滚动。360/390/430 宽度与 1280/1440 PC 排版检查通过，真实手机键盘/微信仍需实测。
 
-**手机新版尚未发布到生产**：代码已推送 GitHub（`de8aa8b`）；Sites 源提交已推送为 `6f7f04e8b9ea86378e13f7cef90e329d933b87d8`。保存版本时原路径两次、ASCII 临时路径一次均在文件上传阶段失败（OpenAI blob upload error sending request），未返回 saved version ID，未启动部署。线上仍为上次公开版。不要将此前公开发布成功记录理解为本次手机版已上线。
+**手机新版已于 2026-10-15 14:38（Asia/Shanghai）发布成功**：第 13 版，Sites 源提交 `6f7f04e8b9ea86378e13f7cef90e329d933b87d8`；版本 ID `appgprj_6acf3606f92881919e76f18dea03390e~appgver_6a50ed959cfc8191be262ad6c702483f`，部署 ID `appgdep_6ad074e6c59c81919ddfa048a93611b7`，环境修订 1，保持 public。线上已确认手机独立首页及无需登录的登记弹窗。
 
-重试材料：`.sites-runtime/yiqizu-mobile-redesign.tar.gz`，镜像副本 `C:/Users/1/AppData/Local/Temp/yiqizu-mobile-redesign.tar.gz`；包必须继续匹配上述 Sites 源提交。站点当前 public，恢复后用 save_site_version + deploy_site_version；不应使用 private 部署或重复创建站点。本地新版截图位于 `validation/mobile-redesign-2026-10-15/`，为浏览器模拟验收而非真机证据。
+排查记录：此前三次为文件上传连接错误；本轮复用完全相同的归档上传成功，无需修改应用代码。随后部署请求到 `chatgpt.com/backend-api/ps/mcp` 连接失败，读取已保存版本确认 deployment_id=null 后重试部署成功。可确认发生过间歇传输失败，不能据此认定具体网络服务商或代理是根因；未更改系统代理、认证或站点权限。匿名首页/健康接口 200，运营接口仍 403。线上浏览器确认没有横向溢出；截图 `validation/mobile-redesign-2026-10-15/线上手机首页-v13.jpg` 为浏览器模拟，非真机证据。
 
 用户确认首轮按贵阳市准备，保留八城入口；验证方法需能复用于其他产品。
 

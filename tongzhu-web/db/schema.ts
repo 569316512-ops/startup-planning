@@ -17,8 +17,12 @@ export const rateLimits = sqliteTable('rate_limits',{key:text('key').primaryKey(
 
 // Private pilot intake and first-party session-level funnel events.
 export const pilotLeads=sqliteTable('pilot_leads',{
- id:text('id').primaryKey(),receiptHash:text('receipt_hash').notNull().unique(),sessionId:text('session_id').notNull(),kind:text('kind').notNull(),city:text('city').notNull(),district:text('district').notNull(),budget:integer('budget').notNull(),moveIn:text('move_in').notNull(),note:text('note').notNull(),nickname:text('nickname').notNull(),contactType:text('contact_type').notNull(),contactValue:text('contact_value').notNull(),source:text('source').notNull(),status:text('status').notNull().default('new'),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull()
+ id:text('id').primaryKey(),receiptHash:text('receipt_hash').notNull().unique(),sessionId:text('session_id').notNull(),kind:text('kind').notNull(),city:text('city').notNull(),district:text('district').notNull(),budget:integer('budget').notNull(),moveIn:text('move_in').notNull(),note:text('note').notNull(),housing:text('housing').notNull().default('{}'),photoIds:text('photo_ids').notNull().default('[]'),nickname:text('nickname').notNull(),contactType:text('contact_type').notNull(),contactValue:text('contact_value').notNull(),source:text('source').notNull(),status:text('status').notNull().default('new'),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull()
 });
 export const pilotEvents=sqliteTable('pilot_events',{
  id:text('id').primaryKey(),sessionId:text('session_id').notNull(),event:text('event').notNull(),city:text('city').notNull(),source:text('source').notNull(),createdAt:text('created_at').notNull()
+});
+
+export const pilotUploads=sqliteTable('pilot_uploads',{
+ id:text('id').primaryKey(),receiptHash:text('receipt_hash').notNull(),objectKey:text('object_key').notNull(),contentType:text('content_type').notNull(),createdAt:text('created_at').notNull()
 });

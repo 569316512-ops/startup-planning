@@ -1,14 +1,14 @@
 {
   "product": "yiqizu-guiyang",
   "targetRegionMobileWorks": null,
-  "anonymousAccessWorks": null,
-  "coreActionWorks": null,
+  "anonymousAccessWorks": true,
+  "coreActionWorks": true,
   "qualifiedVisitors": null,
   "submissions": null,
   "conversations": null,
   "strongActions": null,
   "spentCNY": null,
   "founderHours": null,
-  "evidence": [],
-  "notes": ""
+  "evidence": ["发布验收.md", "手机首页验收.jpg", "手机登记验收.jpg"],
+  "notes": "软件与匿名访问验收通过；核心登记使用明确标记的虚构测试并即时撤回。不代表中国大陆真实手机网络可用性，也不代表真实需求已验证。真人指标待采集。"
 }

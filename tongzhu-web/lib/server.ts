@@ -1,3 +1,4 @@
+import {handlePilot} from './pilot-server';
 import { env } from 'cloudflare:workers';
 import { compare } from './compatibility';
 import { DEMO_POSTS, DEMO_PROFILES } from './demo';
@@ -51,6 +52,7 @@ export async function handleAPI(request:Request):Promise<Response>{
  const url=new URL(request.url),path=url.pathname.replace(/^\/api\/v1\/?/,'').replace(/\/$/,''),method=request.method,u=await session(request);
  if(!['GET','HEAD'].includes(method)){must(!request.headers.get('origin')||request.headers.get('origin')===url.origin,'请求来源不受支持',403);const size=Number(request.headers.get('content-length')||0);must(size<=6*1024*1024,'上传内容过大',413);}
  const body=async()=>{const raw=await request.text();must(raw.length<40000,'内容过长',413);try{return JSON.parse(raw) as Row;}catch{throw new HttpError(400,'请求格式不正确')}};
+ if(path.startsWith('pilot/'))return await handlePilot(request,u,{all,first,run,throttle,sha});
  if(path==='health')return json({status:'ok',database:!!runtime.DB,uploads:!!runtime.BUCKET,aiConfigured:!!runtime.AI_API_KEY});
  if(path==='auth/session')return json(u?privateProfile(u):null);
  if(path==='auth/register'&&method==='POST'){

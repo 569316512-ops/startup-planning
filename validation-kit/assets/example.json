@@ -1,0 +1,37 @@
+{
+  "slug": "yiqizu-guiyang",
+  "product": "一起租",
+  "audience": "贵阳市未来30天准备搬家、希望原户型合租的成年人",
+  "scene": "正在找住处或招室友，已有具体预算、片区和入住时间",
+  "promise": "先用两分钟登记核心需求，再人工联系可能合适的人",
+  "coreAction": "完成一次真实合租需求登记",
+  "strongAction": "双方确认约看房或讨论具体合租安排",
+  "url": "https://yiqizu-guiyang.coppershark1.chatgpt.site/?city=贵阳",
+  "days": 7,
+  "budgetCNY": 300,
+  "founderHours": 15,
+  "targets": {
+    "qualifiedVisitors": 50,
+    "submissions": 10,
+    "conversations": 5,
+    "strongActions": 2
+  },
+  "channels": [
+    {
+      "id": "wechat_group",
+      "name": "经管理员同意的贵阳租房群",
+      "quota": 20
+    },
+    {
+      "id": "colleague",
+      "name": "贵阳同事、园区与校友转介绍",
+      "quota": 15
+    },
+    {
+      "id": "friend",
+      "name": "朋友转介绍的近期真实租房者",
+      "quota": 15
+    }
+  ],
+  "region": "中国大陆"
+}

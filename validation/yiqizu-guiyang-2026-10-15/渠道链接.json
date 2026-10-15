@@ -1,0 +1,20 @@
+[
+  {
+    "id": "wechat_group",
+    "name": "经管理员同意的贵阳租房群",
+    "quota": 20,
+    "url": "https://yiqizu-guiyang.coppershark1.chatgpt.site/?city=%E8%B4%B5%E9%98%B3&src=wechat_group"
+  },
+  {
+    "id": "colleague",
+    "name": "贵阳同事、园区与校友转介绍",
+    "quota": 15,
+    "url": "https://yiqizu-guiyang.coppershark1.chatgpt.site/?city=%E8%B4%B5%E9%98%B3&src=colleague"
+  },
+  {
+    "id": "friend",
+    "name": "朋友转介绍的近期真实租房者",
+    "quota": 15,
+    "url": "https://yiqizu-guiyang.coppershark1.chatgpt.site/?city=%E8%B4%B5%E9%98%B3&src=friend"
+  }
+]

@@ -14,3 +14,11 @@ export const verifications = sqliteTable('verifications',{id:text('id').primaryK
 export const orders = sqliteTable('orders',{id:text('id').primaryKey(),userId:text('user_id').notNull().references(()=>users.id),postId:text('post_id').notNull(),plan:text('plan').notNull(),amount:integer('amount').notNull(),status:text('status').notNull().default('awaiting_provider'),createdAt:text('created_at').notNull()});
 export const blocks = sqliteTable('blocks',{userId:text('user_id').notNull().references(()=>users.id),targetId:text('target_id').notNull().references(()=>users.id)},t=>[primaryKey({columns:[t.userId,t.targetId]})]);
 export const rateLimits = sqliteTable('rate_limits',{key:text('key').primaryKey(),hits:integer('hits').notNull(),until:text('until').notNull()});
+
+// Private pilot intake and first-party session-level funnel events.
+export const pilotLeads=sqliteTable('pilot_leads',{
+ id:text('id').primaryKey(),receiptHash:text('receipt_hash').notNull().unique(),sessionId:text('session_id').notNull(),kind:text('kind').notNull(),city:text('city').notNull(),district:text('district').notNull(),budget:integer('budget').notNull(),moveIn:text('move_in').notNull(),note:text('note').notNull(),nickname:text('nickname').notNull(),contactType:text('contact_type').notNull(),contactValue:text('contact_value').notNull(),source:text('source').notNull(),status:text('status').notNull().default('new'),createdAt:text('created_at').notNull(),updatedAt:text('updated_at').notNull()
+});
+export const pilotEvents=sqliteTable('pilot_events',{
+ id:text('id').primaryKey(),sessionId:text('session_id').notNull(),event:text('event').notNull(),city:text('city').notNull(),source:text('source').notNull(),createdAt:text('created_at').notNull()
+});

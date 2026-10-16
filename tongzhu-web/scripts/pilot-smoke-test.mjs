@@ -6,7 +6,7 @@ const operator={'oai-authenticated-user-id':'local-test-operator','oai-authentic
 async function call(path,method='GET',body,expected=200,headers={}){const r=await fetch(origin+'/api/v1/pilot/'+path,{method,headers:{...headers,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});const data=await r.json();assert.equal(r.status,expected,`${method} ${path}: ${JSON.stringify(data)}`);return data;}
 const sessionId=crypto.randomUUID(),receiptToken=crypto.randomUUID();
 const date=new Date(Date.now()+14*86400000).toISOString().slice(0,10);
-const lead={sessionId,receiptToken,kind:'seeker',city:'贵阳',district:'观山湖区',budget:1200,moveIn:date,note:'本地测试：希望通勤方便，作息规律，不是真实求租。',nickname:'本地虚构测试',contactType:'wechat',contact:'local_test_only',adult:true,consent:true,source:'test',website:''};
+const lead={sessionId,receiptToken,kind:'seeker',city:'贵阳',district:'观山湖区',budget:1200,moveIn:date,note:'本地测试：希望通勤方便，作息规律，不是真实求租。',nickname:'本地虚构测试',contactType:'wechat',contact:'local_test_only',adult:true,consent:true,publicConsent:true,source:'test',website:''};
 const event={event:'visit',sessionId,eventId:crypto.randomUUID(),city:'贵阳',source:'test'};
 await call('events','POST',event);await call('events','POST',event);
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');

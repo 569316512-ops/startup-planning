@@ -12,7 +12,7 @@ export interface Profile {
 }
 export interface Post {
  id:string;ownerId:string;kind:Kind;status:string;title:string;city:string;district:string;price:number;totalRent:number;bedrooms:number;bathrooms:number;area:number;location:string;roomType:string;housingState:HousingState;availableFrom:string;leaseMonths:number;description:string;amenities:string[];lifestyleTags:string[];images:string[];originalLayout:boolean;billsIncluded:boolean;preferredGender:string;roommatesNeeded:number;lat:number;lng:number;contactPublic:boolean;createdAt:string;owner:Profile;saved:boolean;interested:boolean;interestCount:number;compatibility:Compatibility|null;promoted:boolean;demo:boolean;
- nearestTransit?:string;nearbyFacilities?:string[];coRentalRules?:string;
+ nearestTransit?:string;nearbyFacilities?:string[];coRentalRules?:string;pilot?:boolean;
 }
 export interface Filters {city:string;kind:string;district:string;maxPrice:string;bedrooms:string;housingState:string;tag:string;q:string;sort:string;}
 export const EMPTY_FILTERS: Filters={city:DEFAULT_CITY,kind:'all',district:'全部区域',maxPrice:'',bedrooms:'',housingState:'',tag:'',q:'',sort:'recent'};

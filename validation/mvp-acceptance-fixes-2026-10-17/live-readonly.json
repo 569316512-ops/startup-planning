@@ -1,0 +1,26 @@
+{
+  "checks": [
+    {
+      "path": "/api/v1/health",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/service-info",
+      "status": 200,
+      "body": {
+        "operatorName": "",
+        "supportEmail": "",
+        "passwordResetAvailable": false
+      }
+    },
+    {
+      "path": "/api/v1/admin/feedback",
+      "status": 401
+    },
+    {
+      "path": "/?qa=1&v=28",
+      "status": 200
+    }
+  ],
+  "note": "Initial Python urllib health request returned403; curl HTTPS checks passed. Browser and real-device behavior not verified."
+}

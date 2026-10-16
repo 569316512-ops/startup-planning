@@ -2,6 +2,20 @@
 
 更新时间：2026-10-17（Asia/Shanghai）
 
+## 当前状态：v28验收修复（2026-10-17）
+
+已按v27验收报告修复并发布v28，原v27验收记录保留为历史证据，以下旧章节不代表最新线上状态。
+
+- 线上：<https://yiqizu-guiyang.coppershark1.chatgpt.site/?v=28>，public；Sites源提交`dffef2493997488aa9f6920365c39d0f52247483`，版本ID`appgprj_6acf3606f92881919e76f18dea03390e~appgver_3792a29ab4c48191b9aee4ee12f42eb1`。部署`appgdep_6ad26fa68c8c8191a8b9c4ff15aafaff`返回succeeded，环境revision1；数据库overview确认两张新表已存在。GitHub提交号以`git log -1`为准。
+- QA-01：新增注册处、页面底部及「我的」条款/帮助入口；完整数据说明、匿名反馈、运营队列/处理标记。真实运营者名称与对外邮箱尚待用户提供；不能把PILOT_OWNER_EMAIL自动公开。该项仍有运营资料缺口。
+- QA-02：新增Resend邮件重置界面/接口，一次性15分钟32字节随机令牌、仅hash入库、旧密码绑定、D1原子认领、撤销所有旧会话及限频。未配置发信时返回503，线上service-info确认passwordResetAvailable=false。代码通过不等于真实邮件收发通过。
+- QA-03：微信、小红书、抖音的前后端归因及访问/登记数据通过本地D1验证；看板提供各自推广链接。桌面“无需注册”改为先填后登录发布，聊天提示暂无站外提醒。
+- 迁移新增0010，完整0000–0010；包含password_resets和support_requests，旧库只追加迁移。独立本地测试库保留在`/workspace/qa/yiqizu-mvp-fixes/.wrangler/member-tests/v3`，不是生产库。
+- 本轮15组API/业务回归、2组专项测试、构建/类型检查通过；详情、日志及线上curl只读证据见`validation/mvp-acceptance-fixes-2026-10-17.md`及同名目录。本轮无可用Browser js/CUA工具，9组浏览器回归和实体手机未执行。首次urllib403而curl正常，原因未确定，需实机继续观察。
+- 下一步只补真实配置和验收：按`tongzhu-web/docs/mvp-operations.md`配置OPERATOR_NAME、SUPPORT_EMAIL、RESEND_API_KEY(secret)、MAIL_FROM已验证发信地址、RESET_PUBLIC_ORIGIN；实际收件及重置验收，再走iPhone/安卓微信/抖音全链路。然后10–20人受控招募、人工核实需求与回复，支付继续关闭。
+- 测试只写独立本地D1/R2，没有新增生产测试用户、反馈、帖子或支付数据。Sites官方site-workflow脚本在此环境缺失，沿用已存在的stdin隐藏凭证原生Git推送脚本及项目构建/打包流程，Sites原生save/deploy已确认源码SHA和包匹配。
+
+
 ## GitHub同步交接（2026-10-17）
 
 本次GitHub提交汇总自v19归档后的全部已授权工作，业务源码对应当前线上v27，包含联系方式授权、会员额度/人工审核、快速帖收藏聊天、字段拆分、原帖编辑与图片并发保护、个人介绍统一维护及最新UI修复。不是一次新部署。

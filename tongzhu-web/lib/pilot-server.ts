@@ -11,7 +11,7 @@ class PilotError extends Error{constructor(public status:number,message:string){
 const ensure=(ok:unknown,message:string,status=400)=>{if(!ok)throw new PilotError(status,message)};
 const text=(v:unknown,max:number)=>typeof v==='string'?v.trim().slice(0,max):'';
 const tokenOK=(v:unknown)=>typeof v==='string'&&/^[a-zA-Z0-9-]{32,64}$/.test(v);
-const SOURCES=['direct','wechat_group','friend','colleague','xiaohongshu','test'];
+const SOURCES=['direct','wechat_group','friend','colleague','xiaohongshu','douyin','test'];
 const STAGES=['new','qualified','contacted','viewing','matched','invalid'];
 const response=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 

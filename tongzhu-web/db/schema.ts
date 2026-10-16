@@ -39,3 +39,7 @@ export const membershipOrders=sqliteTable('membership_orders',{id:text('id').pri
 
 // Quick posts have a separate lifecycle from ordinary posts; withdrawal cascades saves.
 export const pilotFavorites=sqliteTable('pilot_favorites',{postId:text('post_id').notNull().references(()=>pilotLeads.id,{onDelete:'cascade'}),userId:text('user_id').notNull().references(()=>users.id),createdAt:text('created_at').notNull()},t=>[primaryKey({columns:[t.postId,t.userId]})]);
+
+// Store only hashes of one-time reset secrets; bind each to the current password.
+export const passwordResets=sqliteTable('password_resets',{tokenHash:text('token_hash').primaryKey(),userId:text('user_id').notNull().references(()=>users.id),passwordSnapshot:text('password_snapshot').notNull(),expiresAt:text('expires_at').notNull(),createdAt:text('created_at').notNull(),usedAt:text('used_at'),claim:text('claim')});
+export const supportRequests=sqliteTable('support_requests',{id:text('id').primaryKey(),userId:text('user_id').references(()=>users.id),category:text('category').notNull(),content:text('content').notNull(),contact:text('contact').notNull(),status:text('status').notNull().default('open'),createdAt:text('created_at').notNull()});

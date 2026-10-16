@@ -1,0 +1,6 @@
+{
+  "binding": "DB",
+  "hasPasswordResets": true,
+  "hasSupportRequests": true,
+  "method": "Sites deployed database overview metadata; no row data read"
+}

@@ -1,3 +1,4 @@
+import {handleAccountSafety,type SafetyConfig} from './account-safety';
 import {pilotAudience} from './pilot-audience';
 import {matchesListingTag} from './listing-filters';
 import {handleMembership,membershipStatus,atomicPublish} from './membership';
@@ -10,7 +11,7 @@ import {CITIES,districtsFor,cityInfo,DEFAULT_CITY} from './cities';
 import { AMENITIES, DISTRICTS, TAGS, STATES, type Profile, type Post } from './models';
 
 type Row=Record<string,any>;
-const runtime=env as unknown as {DB:D1Database;BUCKET:R2Bucket;PILOT_OWNER_EMAIL?:string;ADMIN_EMAIL?:string;ADMIN_SETUP_TOKEN?:string;AI_API_KEY?:string;AI_BASE_URL?:string;AI_MODEL?:string;AMAP_API_KEY?:string};
+const runtime=env as unknown as SafetyConfig & {DB:D1Database;BUCKET:R2Bucket;PILOT_OWNER_EMAIL?:string;ADMIN_EMAIL?:string;ADMIN_SETUP_TOKEN?:string;AI_API_KEY?:string;AI_BASE_URL?:string;AI_MODEL?:string;AMAP_API_KEY?:string};
 const now=()=>new Date().toISOString();
 const uuid=()=>crypto.randomUUID();
 const db=()=>{if(!runtime.DB)throw new HttpError(503,'数据库尚未配置');return runtime.DB;};
@@ -60,6 +61,8 @@ export async function handleAPI(request:Request):Promise<Response>{
  if(!['GET','HEAD'].includes(method)){must(!request.headers.get('origin')||request.headers.get('origin')===url.origin,'请求来源不受支持',403);const size=Number(request.headers.get('content-length')||0);must(size<=6*1024*1024,'上传内容过大',413);}
  const body=async()=>{const raw=await request.text();must(raw.length<40000,'内容过长',413);try{return JSON.parse(raw) as Row;}catch{throw new HttpError(400,'请求格式不正确')}};
  const membershipDB={all,first,run,throttle,sha,batch:async(statements:{sql:string;args:any[]}[])=>db().batch(statements.map(q=>db().prepare(q.sql).bind(...q.args)))};
+ const safety=await handleAccountSafety(request,path,u,membershipDB,runtime,pwHash,Boolean(runtime.PILOT_OWNER_EMAIL&&request.headers.get('oai-authenticated-user-id')&&request.headers.get('oai-authenticated-user-email')?.toLowerCase()===runtime.PILOT_OWNER_EMAIL.toLowerCase()));
+ if(safety)return safety;
  if(path.startsWith('membership')||path.startsWith('admin/membership'))return handleMembership(request,u,membershipDB,runtime.BUCKET,Boolean(runtime.PILOT_OWNER_EMAIL&&request.headers.get('oai-authenticated-user-id')&&request.headers.get('oai-authenticated-user-email')?.toLowerCase()===runtime.PILOT_OWNER_EMAIL.toLowerCase()));
  if(path.startsWith('pilot/'))return await handlePilot(request,u,{...membershipDB,publish:(sql:string,args:any[],id:string,userId:string,guard?:{sql:string;args:any[]})=>atomicPublish(membershipDB,sql,args,id,userId,guard)});
  if(path==='health')return json({status:'ok',database:!!runtime.DB,uploads:!!runtime.BUCKET,aiConfigured:!!runtime.AI_API_KEY});

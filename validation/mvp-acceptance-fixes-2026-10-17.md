@@ -1,0 +1,30 @@
+# MVP验收问题修复记录（2026-10-17）
+
+基线：v27 / 692e7c3。范围：QA-01/02/03及登记文案、消息提醒预期。新增迁移0010，不改写0000–0009。
+
+- QA-01：注册处可点击完整说明，手机底部及「我的」提供帮助入口；匿名反馈入库，运营专属读取/处理，内容与联系方式不对普通用户公开。真实运营者名称/对外邮箱仍待提供，不标记全部关闭。
+- QA-02：提供申请重置邮件和设置新密码界面；一次性15分钟随机令牌、仅hash入库、密码变更使旧链接失效、D1原子认领/更新/清空会话、请求限频。未配置Resend/已验证发信地址时明确503；真实邮件和实机收件尚未验收，不标记生产可用。
+- QA-03：客户端与服务端均保留douyin；微信、小红书、抖音的访问事件与登记归因本地D1验证通过。看板提供对应推广链接。
+- P2：桌面改为“先填写，登录后发布”，消息界面提示暂无站外提醒、需回来查看。没有新增付费或站外推送。
+
+## 验证
+
+- `npm run build`、`npx tsc --noEmit --incremental false`通过。
+- 14组既有接口/业务回归通过：pilot-upload-guard、profile-edit、post-edit-photos、detail-content、seeker-amenities、min-lease、member-quota、explore-feedback、smoke、contact-smoke、pilot-smoke、member-smoke、member-race、contact-day。
+- 新增 `mvp-safety-test.mjs`通过：未配置邮件503、密码规则、错误/复用令牌、真实D1并发单次认领、旧会话退出、匿名反馈、越权防护、运营读写/不存在记录、限频、三渠道事件与登记。
+- 新增 `password-recovery-test.mjs`通过：真实SQLite事务、只替代外部发信接口；验证发往正确邮箱、泛化响应、令牌不进入API响应或数据库明文、发信origin固定、过期/重复/密码变化/停用账户失效、同链接/不同链接并发、其他人会话不受影响、发信失败清理。故意注入503发信失败的日志属测试预期，不是真实发信。
+- 新增 `channel-attribution-test.mjs`通过：三渠道与非法来源fallback；先在旧代码复现douyin被记为direct，再验证修复。
+- 新接口集成测试先在旧构建复现service-info404，随后新构建通过。
+- 本轮没有可用的Browser js或CUA REPL工具，因此未运行9组浏览器回归或新界面浏览器交互验收，未代称手机实测。前轮v27浏览器结果不能替代本轮UI复测。
+
+## 放行边界
+
+仍仅建议受控内测。运营信息、真实发信配置及收件、实体手机微信/抖音内置浏览器尚待完成。测试均使用独立本地D1/R2，没有写入生产测试账号、帖子、反馈或支付数据。原v27验收报告保留为历史基线，部署结果与源码提交记录见根HANDOFF。
+
+## 发布与线上检查
+
+已发布v28，Sites源码提交`dffef2493997488aa9f6920365c39d0f52247483`，部署`appgdep_6ad26fa68c8c8191a8b9c4ff15aafaff`返回succeeded，环境revision1。Sites线上数据库overview确认password_resets及support_requests两表均已存在。迁移0010随包提供，保留public访问。
+
+线上curl HTTPS只读：首页200、health200、service-info200、匿名运营反馈读取401；service-info确认运营者/客服邮箱为空、找回未启用。没有提交真实反馈或注册/修改生产用户。首次Python urllib健康请求403，curl检查正常，未宣称已确定该差异原因或完成浏览器验收。
+
+本轮构建和类型检查通过，15组API/业务测试及2组独立专项测试通过。日志、results.json、live-readonly.json在同名目录。真实邮件未发送，9组浏览器回归及实机尚未运行。

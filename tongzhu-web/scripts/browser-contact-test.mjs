@@ -1,0 +1,74 @@
+import {resetRates} from './member-test-fixtures.mjs';
+resetRates();
+// Local browser regression. Requires Playwright and Chromium; never targets production.
+import assert from 'node:assert/strict';
+import {mkdir,writeFile} from 'node:fs/promises';
+const {chromium,request:playwrightRequest}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const origin=process.argv[2]||'http://127.0.0.1:5188';
+assert(['localhost','127.0.0.1'].includes(new URL(origin).hostname),'Browser fixtures are local-only');
+await mkdir('outputs',{recursive:true});
+const password='Browser-test-password-2026',email=`browser-${crypto.randomUUID()}@test.local`;
+const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
+const api=await playwrightRequest.newContext({baseURL:origin});
+const reg=await api.post('/api/v1/auth/register',{data:{email,password,firstName:'浏览器访客',age:26,gender:'不透露',city:'贵阳',district:'观山湖区',budgetMax:1200,bio:'',lifestyleTags:[]}});assert.equal(reg.status(),200);
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_EXECUTABLE||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
+const publisher=await browser.newContext({viewport:{width:390,height:844}}),visitor=await browser.newContext({viewport:{width:1280,height:900}});
+await visitor.grantPermissions(['clipboard-read','clipboard-write'],{origin});
+const page=await publisher.newPage(),view=await visitor.newPage(),records=[],errors=[],results=[];page.setDefaultTimeout(10000);view.setDefaultTimeout(10000);
+for(const p of [page,view])p.on('pageerror',e=>errors.push(e.message));
+const pass=s=>{results.push(s);console.log('PASS:',s)};
+async function noOverflow(p){assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1&&Array.from(document.querySelectorAll('dialog[open],dialog[open] .modal-body')).every(el=>el.scrollWidth<=el.clientWidth+1)));}
+try{
+ const publisherAuth=await publisher.request.post(origin+'/api/v1/auth/register',{data:{email:'publisher-'+crypto.randomUUID()+'@test.local',password}});assert.equal(publisherAuth.status(),200);
+ await page.goto(origin,{waitUntil:'domcontentloaded'});
+ await page.locator('.mobile-entry-grid').getByRole('button',{name:'无房找住处',exact:true}).click();
+ const form=page.getByRole('dialog');await form.waitFor();
+ assert.equal(await form.locator('input[type=radio]:checked').count(),0);
+ await form.getByLabel(/^片区/).selectOption('观山湖区');
+ await form.getByLabel(/^帖子标题/).fill('浏览器测试找个合拍室友');await form.getByLabel(/^你的性别/).selectOption('女');await form.getByLabel(/^每月个人预算/).fill('1200');
+ await form.getByLabel(/^(几个月起租|预计租多久)/).fill('3');await form.getByLabel(/^性别要求/).selectOption('男');await form.getByLabel(/^大致入住时间/).fill(new Date(Date.now()+14*86400000).toISOString().slice(0,10));
+ await form.getByLabel(/^我的求租需求/).fill('本地浏览器测试，希望交通方便，不是真实求租。');
+ await form.getByLabel(/^室友期待/).fill('希望室友爱干净，作息规律，愿意沟通。');await form.getByLabel(/^怎么称呼你/).fill('浏览器测试');
+ await form.getByLabel(/^微信号/).fill('browser_check_01');
+ await form.getByLabel('选择个人照片',{exact:true}).setInputFiles({name:'test.png',mimeType:'image/png',buffer:png});
+ await form.getByRole('radio',{name:/允许登录用户/}).check();
+ for(const box of await form.getByRole('checkbox').all())await box.check();
+ await noOverflow(page);
+ await form.getByRole('button',{name:'免费发布，让合适的人找到我'}).click();
+ await form.getByRole('heading',{name:'需求已发布'}).waitFor();
+ const receipt=await page.evaluate(()=>JSON.parse(localStorage.getItem('yiqizu-pilot-receipts-v2'))[0]);records.push(receipt);
+ pass('手机390px主动授权并上传照片，真实表单提交成功，未默认勾选授权');
+ await form.getByRole('button',{name:/查看刚发布的帖子/}).click();
+ await page.waitForURL(/view=detail/);assert(page.url().includes('pilot-'+receipt.id));
+ await page.getByRole('heading',{name:'浏览器测试找个合拍室友',exact:true}).waitFor();
+ assert.equal(await page.getByText('0岁',{exact:false}).count(),0);assert.equal(await page.getByText('12个月租期',{exact:false}).count(),0);await noOverflow(page);
+ const url=page.url();pass('提交后定位新帖，详情不显示0岁或默认12个月租期，手机无横向溢出');
+ await view.goto(url,{waitUntil:'domcontentloaded'});
+ await view.getByRole('button',{name:'查看联系方式',exact:true}).click();
+ const login=view.getByRole('dialog');await login.getByRole('heading',{name:'登录一起租'}).waitFor();
+ await login.getByLabel('邮箱',{exact:true}).fill(email);await login.getByLabel('密码',{exact:true}).fill(password);await login.getByRole('button',{name:'登录',exact:true}).click();
+ await view.getByRole('dialog').getByText('browser_check_01',{exact:true}).waitFor();await view.getByRole('dialog').getByRole('button',{name:'复制',exact:true}).click();assert.equal(await view.evaluate(()=>navigator.clipboard.readText()),'browser_check_01');await noOverflow(view);
+ await view.screenshot({path:'outputs/contact-desktop-retest.png',fullPage:true});pass('桌面匿名点击联系先登录，登录后自动展示授权微信，不强制完善资料');
+ await view.getByRole('button',{name:'关闭弹窗'}).click();
+ await visitor.request.post(origin+'/api/v1/auth/logout');await view.reload({waitUntil:'domcontentloaded'});
+ await view.getByRole('button',{name:'查看联系方式',exact:true}).click();
+ await api.put(`/api/v1/pilot/leads/${receipt.id}/contact-settings`,{data:{receiptToken:receipt.token,contactVisibility:'operator'}});
+ const retry=view.getByRole('dialog');await retry.getByLabel('邮箱',{exact:true}).fill(email);await retry.getByLabel('密码',{exact:true}).fill(password);await retry.getByRole('button',{name:'登录',exact:true}).click();
+ await view.getByText('发布者未开放直接联系，联系方式仅运营可见',{exact:true}).waitFor();pass('登录期间撤销授权，恢复联系时403错误仍在页面显示');
+ await page.goto(origin,{waitUntil:'domcontentloaded'});const quickCard=page.locator('.post-card').filter({hasText:'浏览器测试'}).first();await quickCard.waitFor();assert.equal(await quickCard.getByText('12个月租期',{exact:true}).count(),0,'quick listing cards must not invent a 12-month lease');assert.equal(await quickCard.getByText(/0岁/).count(),0,'quick listing cards must not invent an age');await page.getByRole('button',{name:'登记需求',exact:true}).click();
+ const manage=page.getByRole('dialog');await manage.getByRole('button',{name:'管理联系方式展示'}).click();
+ const groups=manage.locator('fieldset').filter({has:page.getByRole('radio')});await groups.nth(1).waitFor();assert.equal(await groups.count(),2);assert(await manage.locator('.pilot-receipts>div').first().evaluate(el=>el.querySelector('fieldset').getBoundingClientRect().width>=el.getBoundingClientRect().width*.85),'receipt settings should occupy the available mobile width');
+ await groups.nth(0).getByRole('radio',{name:/允许登录用户/}).check();
+ await groups.nth(1).getByRole('radio',{name:/仅一起租运营/}).check();
+ assert.equal(await groups.nth(0).getByRole('radio',{name:/允许登录用户/}).isChecked(),true);
+ assert.equal(await groups.nth(1).getByRole('radio',{name:/仅一起租运营/}).isChecked(),true);
+ await manage.getByRole('button',{name:'保存展示范围'}).click();await manage.getByText('已关闭直接联系，联系方式仅运营可见',{exact:true}).waitFor();
+ const denied=await api.post(`/api/v1/pilot/leads/${receipt.id}/contact`,{data:{}});assert.equal(denied.status(),403);
+ await noOverflow(page);await page.screenshot({path:'outputs/contact-mobile-retest.png',fullPage:true});pass('新表单和旧登记单选组独立，本机保存关闭范围后接口拒绝查看');
+ for(const width of [360,430]){await page.setViewportSize({width,height:844});await noOverflow(page);}pass('360/390/430px表单均无横向溢出');
+ assert.deepEqual(errors,[]);pass('以上流程无浏览器未捕获异常');
+}catch(error){await page.screenshot({path:'outputs/contact-browser-failure.png',timeout:5000}).catch(()=>{});console.error('BROWSER STATE',await page.locator('body').innerText({timeout:3000}).catch(()=>''));throw error;}finally{
+ await writeFile('outputs/contact-browser-results.json',JSON.stringify({results,errors},null,2));
+ for(const row of records){const r=await api.delete(`/api/v1/pilot/leads/${row.id}`,{data:{receiptToken:row.token}});assert.equal(r.status(),200);}
+ await browser.close();await api.dispose();
+}

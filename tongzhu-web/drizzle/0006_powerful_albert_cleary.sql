@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX `membership_open_order` ON `membership_orders` (`user_id`) WHERE "membership_orders"."status" IN ('awaiting_payment','pending_review');--> statement-breakpoint
+CREATE INDEX `publication_user_day` ON `publication_events` (`user_id`,`day`);

@@ -1,0 +1,70 @@
+{
+  "version": 27,
+  "checkedAt": "2026-10-16T18:06:56.401Z",
+  "checks": [
+    {
+      "name": "公开HTTPS、无登录墙、广场接口",
+      "passed": true,
+      "publicPosts": 3,
+      "timing": {
+        "status": 200,
+        "elapsedMs": 2352
+      },
+      "latencyScope": "云端代理路径，不能代表国内手机网速"
+    },
+    {
+      "name": "七种手机/桌面宽度无横向溢出，卡片标签可见",
+      "passed": true
+    },
+    {
+      "name": "两类表单入口和最新字段",
+      "passed": true
+    },
+    {
+      "name": "详情深链、收藏/聊天匿名登录保护",
+      "passed": true
+    },
+    {
+      "name": "失效帖子有明确错误和返回入口",
+      "passed": true
+    },
+    {
+      "name": "匿名不能读取本人帖子/收藏/私信/运营后台/编辑联系数据",
+      "passed": true
+    },
+    {
+      "name": "支付二维码现状",
+      "statuses": {
+        "wechat": 404,
+        "alipay": 404
+      },
+      "passed": true,
+      "detail": "二维码均404表示尚未配置；结合本地未配置时付款按钮禁用检查"
+    }
+  ],
+  "findings": [
+    {
+      "id": "QA-02",
+      "level": "P1",
+      "name": "缺少找回密码",
+      "evidence": "注册/登录对话框明确提示不支持邮箱找回；只有需旧密码的修改密码"
+    },
+    {
+      "id": "QA-01",
+      "level": "P1",
+      "name": "手机注册无法阅读完整隐私/条款，缺可用运营处理入口",
+      "evidence": "注册仅声明同意，文案不是可点链接；手机footer隐藏"
+    },
+    {
+      "id": "QA-01-detail",
+      "level": "P1",
+      "name": "隐私说明仍为占位文案",
+      "evidence": "线上提示正式运营前需补充隐私政策、主体信息与处理渠道"
+    }
+  ],
+  "errors": [],
+  "server5xx": [],
+  "readOnly": true,
+  "tlsVerified": true,
+  "realDevice": false
+}

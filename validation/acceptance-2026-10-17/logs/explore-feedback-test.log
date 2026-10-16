@@ -1,0 +1,7 @@
+PASS duplicate registration explains login, existing password preserved
+PASS pilot favorite persists, saved collection, idempotency and viewer isolation
+PASS private-contact pilot can chat in-app with real publisher; participant isolation, self-chat denied and thread reused
+PASS legacy post claim requires receipt and cannot transfer existing ownership
+PASS expanded filters match facility synonyms with AND semantics
+PASS quick posts honor block and suspension in feed/detail/favorites/contact/chat
+PASS withdrawn favorite disappears and no new chat on withdrawn posts

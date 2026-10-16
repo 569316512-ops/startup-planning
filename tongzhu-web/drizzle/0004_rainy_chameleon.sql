@@ -1,0 +1,1 @@
+ALTER TABLE `pilot_leads` ADD `occupation` text DEFAULT '' NOT NULL;

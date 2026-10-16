@@ -1,19 +1,23 @@
+import {resetRates,grantFixtureMember} from './member-test-fixtures.mjs';
+resetRates();
 // Real integration checks. Only runs against a local preview; never creates hosted test accounts.
 import assert from 'node:assert/strict';
 const origin=process.argv[2]||'http://127.0.0.1:5173';
 assert(['127.0.0.1','localhost'].includes(new URL(origin).hostname),'Smoke tests are local-only');
 function client(){let cookie='';const call=async(path,method='GET',body,expected=200)=>{const response=await fetch(origin+'/api/v1/'+path,{method,headers:{...(cookie?{cookie}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});if(response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];const data=await response.json();assert.equal(response.status,expected,`${method} ${path}: ${JSON.stringify(data)}`);return data;};call.upload=async(file)=>{const form=new FormData();form.append('file',file);const response=await fetch(origin+'/api/v1/uploads',{method:'POST',headers:{cookie},body:form});const data=await response.json();assert.equal(response.status,201,`POST uploads: ${JSON.stringify(data)}`);return data.url;};return call;}
 const a=client(),b=client(),stranger=client(),stamp=Date.now();
-const base={firstName:'测试室友',age:26,gender:'不透露',occupation:'产品设计师',district:'观山湖区',budgetMax:1200,moveIn:'2026-11-01',lifestyleTags:['不吸烟','爱干净'],bio:'这是本地自动检查的测试账户，不会发布到线上。',workSchedule:'朝九晚六',sleepSchedule:'晚上十一点前休息',cookingFrequency:'偶尔做饭',cleaningFrequency:'每周轮值',petSituation:'无宠物，可接受猫',guestPreference:'访客提前沟通',housingPreferences:'希望交通方便、采光良好',roommateExpectations:'希望共同维护卫生并按时分摊费用',isPublic:true,userType:'tenant',contact:{phone:'',wechat:'',visible:false},password:'Local-check-strong-password'};
+const base={firstName:'测试室友',age:26,gender:'不透露',occupation:'产品设计师',district:'观山湖区',budgetMax:1200,moveIn:'2026-11-01',lifestyleTags:['不吸烟','爱干净'],bio:'这是本地自动检查的测试账户，不会发布到线上。',workSchedule:'朝九晚六',sleepSchedule:'晚上十一点前休息',cookingFrequency:'偶尔做饭',cleaningFrequency:'每周轮值',petSituation:'无宠物，可接受猫',guestPreference:'访客提前沟通',housingPreferences:'希望交通方便、采光良好',roommateExpectations:'希望共同维护卫生并按时分摊费用',isPublic:true,userType:'tenant',contact:{phone:'',wechat:'',visible:false},password:'Local-check-strong-password1'};
 const p=await a('auth/register','POST',{...base,email:`a-${stamp}@tongzhu.test`});
 const q=await b('auth/register','POST',{...base,firstName:'另一位测试室友',email:`b-${stamp}@tongzhu.test`});
-await stranger('auth/register','POST',{...base,age:17,email:`under-${stamp}@tongzhu.test`},400);
+grantFixtureMember(p.id);
 const imageBuffer=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
 const photoA=await a.upload(new File([imageBuffer],'room.png',{type:'image/png'})),photoB=await b.upload(new File([imageBuffer],'daily.png',{type:'image/png'}));
-const room={kind:'room',title:'贵阳原户型两居测试帖子',district:'观山湖区',price:1200,totalRent:2400,bedrooms:2,bathrooms:1,area:80,location:'测试小区',nearestTransit:'测试公交站约500米',nearbyFacilities:['超市','公园'],housingState:'teamup',availableFrom:'2026-11-01',leaseMonths:12,description:'本地测试：先认识彼此，讨论作息和清洁安排后再一起租下房子。',amenities:['独立卧室','可做饭'],lifestyleTags:['不吸烟'],coRentalRules:'公共区域每周轮值，费用按月分摊。',images:[photoA],originalLayout:true};
+await a('me','PUT',{...base,avatar:photoA,contact:{phone:'13800000000',wechat:'local_check_only',visible:false}});await b('me','PUT',{...base,firstName:'另一位测试室友',avatar:photoB,contact:{phone:'13800000001',wechat:'local_check_other',visible:false}});await a('me','PUT',{...base,age:17,avatar:photoA,contact:{phone:'13800000000',wechat:'local_check_only',visible:false}},400);
+const room={kind:'room',title:'贵阳原户型两居测试帖子',district:'观山湖区',price:1200,totalRent:2400,bedrooms:2,bathrooms:1,area:80,location:'测试小区',nearestTransit:'测试公交站约500米',nearbyFacilities:['超市','公园'],housingState:'teamup',availableFrom:'2026-11-01',leaseMonths:12,description:'本地测试：先认识彼此，讨论作息和清洁安排后再一起租下房子。',amenities:['独立卧室','可做饭'],lifestyleTags:['不吸烟'],coRentalRules:'公共区域每周轮值，费用按月分摊。',personalIntro:'我是工程师，规律上班，周末喜欢阅读。',roommateExpectations:'希望室友作息规律，愿意沟通，尊重公共空间。',images:[photoA],originalLayout:true};
 await a('listings','POST',{...room,originalLayout:false},400);
 await a('listings','POST',{...room,bedrooms:5},400);
 const post=await a('listings','POST',room,201);
+const content=await a('listings/'+post.id);assert.equal(content.personalIntro,(await a('auth/session')).bio);assert.equal(content.roommateExpectations,room.roommateExpectations);assert.equal(content.coRentalRules,room.coRentalRules);assert.equal(content.description,room.description);
 const seekers=await b('listings','POST',{...room,kind:'seeker',title:'我在观山湖找原户型合租的住处',images:[photoB]},201);
 const publicFeed=await stranger('listings?demo=0&kind=room&district=观山湖区&maxPrice=1300');assert(publicFeed.items.some(x=>x.id===post.id));
 await b(`listings/${post.id}`,'PUT',{status:'paused'},403);
@@ -51,7 +55,7 @@ const conversation=await b('conversations','POST',{userId:p.id,postId:post.id});
 await b(`conversations/${conversation.id}/messages`,'POST',{content:'你好，我们先聊一下作息和租期。'},201);
 const read=await a(`conversations/${conversation.id}/messages`);assert.equal(read.items.at(-1).content,'你好，我们先聊一下作息和租期。');
 await stranger(`conversations/${conversation.id}/messages`,'GET',undefined,401);
-const c=client();await c('auth/register','POST',{...base,email:`c-${stamp}@tongzhu.test`});await c(`conversations/${conversation.id}/messages`,'GET',undefined,403);
+const c=client();await c('auth/register','POST',{...base,email:`c-${stamp}@tongzhu.test`});await c(`conversations/${conversation.id}/messages`,'GET',undefined,403);const peerConversation=await c('conversations','POST',{userId:q.id,postId:post.id});assert(peerConversation.id,'roommate conversation can reference the public post without targeting its owner');
 await b('me/searches','POST',{name:'贵阳测试搜索',filters:{district:'观山湖区'}});assert.equal((await b('me/searches')).items[0].name,'贵阳测试搜索');
 await b('reports','POST',{postId:post.id,reason:'其他'});await b('me/verifications','POST',{kind:'身份',note:'本地测试申请，无真实证件数据'});assert.equal((await b('me/verifications')).items[0].status,'pending');
 const order=await a('me/orders','POST',{postId:post.id,plan:'10days'});assert.equal(order.status,'awaiting_provider');

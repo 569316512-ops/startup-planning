@@ -1,0 +1,17 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: auth/login: 401 {"error":{"message":"邮箱或密码不正确","code":"session_invalid"}}
+    at file:///workspace/qa/yiqizu-v27-acceptance/scripts/member-test-client.mjs:4:846
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///workspace/qa/yiqizu-v27-acceptance/scripts/member-race-test.mjs:4:166 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.19.0

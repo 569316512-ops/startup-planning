@@ -1,0 +1,4 @@
+PASS quick and full posts race for same final slot; deletion does not refund
+PASS concurrent order creation/approval, confirmation required, only one extension and renewal adds30days
+PASS rejection does not grant and admin authorization
+PASS test intake remains isolated

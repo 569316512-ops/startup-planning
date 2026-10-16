@@ -1,0 +1,4 @@
+PASS email/password only register
+PASS title/date/gender/persistent default avatar and 3/day
+PASS private proofs, manual approval, 50/30 member quota and idempotency
+MEMBER SMOKE PASS

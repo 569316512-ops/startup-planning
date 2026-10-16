@@ -1,0 +1,117 @@
+[
+  {
+    "name": "pilot-upload-guard-test",
+    "status": "passed",
+    "seconds": 0.6
+  },
+  {
+    "name": "profile-edit-test",
+    "status": "passed",
+    "seconds": 0.7
+  },
+  {
+    "name": "post-edit-photos-test",
+    "status": "passed",
+    "seconds": 0.7
+  },
+  {
+    "name": "detail-content-test",
+    "status": "passed",
+    "seconds": 0.5
+  },
+  {
+    "name": "seeker-amenities-test",
+    "status": "passed",
+    "seconds": 0.3
+  },
+  {
+    "name": "min-lease-test",
+    "status": "passed",
+    "seconds": 0.5
+  },
+  {
+    "name": "member-quota-test",
+    "status": "passed",
+    "seconds": 1.1
+  },
+  {
+    "name": "member-race-test",
+    "status": "failed",
+    "seconds": 0.3
+  },
+  {
+    "name": "explore-feedback-test",
+    "status": "passed",
+    "seconds": 0.8
+  },
+  {
+    "name": "smoke-test",
+    "status": "passed",
+    "seconds": 1.5
+  },
+  {
+    "name": "contact-smoke-test",
+    "status": "passed",
+    "seconds": 1.6
+  },
+  {
+    "name": "pilot-smoke-test",
+    "status": "passed",
+    "seconds": 0.9
+  },
+  {
+    "name": "member-smoke-test",
+    "status": "passed",
+    "seconds": 0.5
+  },
+  {
+    "name": "contact-day-test",
+    "status": "passed",
+    "seconds": 0.4
+  },
+  {
+    "name": "profile-edit-browser-test",
+    "status": "passed",
+    "seconds": 5.6
+  },
+  {
+    "name": "member-login-resume-test",
+    "status": "passed",
+    "seconds": 3.3
+  },
+  {
+    "name": "member-browser-test",
+    "status": "passed",
+    "seconds": 4.7
+  },
+  {
+    "name": "min-lease-browser-test",
+    "status": "passed",
+    "seconds": 4.8
+  },
+  {
+    "name": "detail-content-browser-test",
+    "status": "passed",
+    "seconds": 4.2
+  },
+  {
+    "name": "explore-feedback-browser-test",
+    "status": "passed",
+    "seconds": 11.5
+  },
+  {
+    "name": "detail-feedback-test",
+    "status": "passed",
+    "seconds": 5.5
+  },
+  {
+    "name": "browser-contact-test",
+    "status": "passed",
+    "seconds": 7.0
+  },
+  {
+    "name": "member-owner-browser-test",
+    "status": "passed",
+    "seconds": 2.8
+  }
+]

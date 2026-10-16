@@ -1,0 +1,27 @@
+{
+  "checks": [
+    {
+      "name": "非法预算阻止提交；503后文字/照片保留；重试不重复上传、不重复扣额度",
+      "passed": true
+    }
+  ],
+  "sources": [
+    {
+      "requested": "wechat_group",
+      "recorded": "wechat_group",
+      "correct": true
+    },
+    {
+      "requested": "xiaohongshu",
+      "recorded": "xiaohongshu",
+      "correct": true
+    },
+    {
+      "requested": "douyin",
+      "recorded": "direct",
+      "correct": false
+    }
+  ],
+  "errors": [],
+  "localOnly": true
+}

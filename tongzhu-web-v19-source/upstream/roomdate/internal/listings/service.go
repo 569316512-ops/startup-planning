@@ -1,0 +1,805 @@
+package listings
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"net/http"
+	"regexp"
+	"strconv"
+	"time"
+
+	"roomdate-backend/internal/apperr"
+	"roomdate-backend/internal/db"
+	"roomdate-backend/internal/logx"
+	"roomdate-backend/internal/moderation"
+	"roomdate-backend/internal/page"
+	"roomdate-backend/internal/storage"
+	"roomdate-backend/internal/validate"
+	"roomdate-backend/shared"
+)
+
+const (
+	// Dimensioni delle pagine dell'elenco pubblico.
+	defaultLimit = 24
+	maxLimit     = 50
+
+	// Solo chi affitta può pubblicare annunci. Il ruolo si legge dal database a ogni richiesta.
+	landlordUserType = "affitta"
+
+	// Foto: il browser le ridimensiona prima di caricarle, quindi 5 MB è un limite largo.
+	MaxImages        = 8
+	MaxImageBytes    = 5 << 20
+	uploadURLExpires = 10 * time.Minute
+)
+
+// Tipi di immagine accettati, con l'estensione usata nelle chiavi e i primi byte del formato.
+var imageTypes = map[string]struct {
+	ext   string
+	magic func([]byte) bool
+}{
+	"image/jpeg": {"jpg", func(b []byte) bool { return bytes.HasPrefix(b, []byte{0xFF, 0xD8, 0xFF}) }},
+	"image/png":  {"png", func(b []byte) bool { return bytes.HasPrefix(b, []byte("\x89PNG\r\n\x1a\n")) }},
+	"image/webp": {"webp", func(b []byte) bool {
+		return len(b) >= 12 && bytes.Equal(b[0:4], []byte("RIFF")) && bytes.Equal(b[8:12], []byte("WEBP"))
+	}},
+}
+
+var (
+	errSessionInvalid    = apperr.Unauthorized("session_invalid", "Sessione scaduta: accedi di nuovo")
+	errNotLandlordCreate = apperr.Forbidden("landlord_only", "Solo chi affitta una stanza può pubblicare annunci")
+	errNotFound          = apperr.NotFound("listing_not_found", "Annuncio non trovato")
+	errNotOwner          = apperr.Forbidden("listing_not_owned", "Puoi modificare solo i tuoi annunci")
+	errRemoved           = apperr.Forbidden("listing_removed",
+		"Annuncio rimosso dalla moderazione perché viola i Termini: puoi solo eliminarlo")
+	errImageNotFound   = apperr.NotFound("image_not_found", "Foto non trovata")
+	errStorageDisabled = apperr.New(http.StatusServiceUnavailable, "uploads_unavailable", "Il caricamento delle foto non è disponibile al momento")
+	errMissingActive   = apperr.BadRequest("invalid_active", "Indica se l'annuncio deve essere attivo")
+)
+
+type Service struct {
+	store   *Store
+	storage storage.Storage
+	// moderation dice se chi guarda e il proprietario si sono bloccati, e se chi guarda è un
+	// amministratore (che vede anche gli annunci nascosti, per moderarli)
+	moderation *moderation.Store
+	now        func() time.Time
+}
+
+func NewService(store *Store, st storage.Storage, mod *moderation.Store) *Service {
+	return &Service{store: store, storage: st, moderation: mod, now: time.Now}
+}
+
+// Input sono i dati del modulo di creazione e modifica di un annuncio.
+type Input struct {
+	Title         string   `json:"title"`
+	City          string   `json:"city"`
+	Zone          string   `json:"zone"`
+	RoomType      string   `json:"roomType"`
+	Price         int      `json:"price"`
+	Description   string   `json:"description"`
+	Amenities     []string `json:"amenities"`
+	BillsIncluded *bool    `json:"billsIncluded"`
+	// AvailableFrom è una data AAAA-MM-GG, oppure vuota se non indicata.
+	AvailableFrom string `json:"availableFrom"`
+	// Draft vale solo alla creazione: l'annuncio nasce non pubblicato (la creazione guidata lo
+	// pubblica alla fine, dopo le foto). Nelle modifiche non conta: lo stato cambia con /active.
+	Draft bool `json:"draft"`
+}
+
+// parseInput valida l'input e lo converte nei dati da salvare.
+func (s *Service) parseInput(in Input) (Data, error) {
+	d := Data{
+		Title:       validate.Text(in.Title),
+		City:        validate.Text(in.City),
+		Zone:        validate.Text(in.Zone),
+		RoomType:    in.RoomType,
+		Price:       in.Price,
+		Description: validate.Text(in.Description),
+	}
+
+	var v validate.Validator
+	// Limite uguale a quello della colonna nel database (title VARCHAR(100))
+	v.Check(validate.NotBlank(d.Title) && validate.MaxLen(d.Title, 100), "title", "Il titolo è obbligatorio (massimo 100 caratteri)")
+	v.Check(shared.IsCity(d.City), "city", "Scegli la città dall'elenco")
+	v.Check(validate.MaxLen(d.Zone, 80), "zone", "La zona può avere al massimo 80 caratteri")
+	v.Check(validate.OneOf(d.RoomType, "singola", "doppia"), "roomType", "Tipo di stanza non valido")
+	v.Check(validate.Between(d.Price, 1, 20000), "price", "Il prezzo deve essere compreso tra 1 e 20.000 €")
+	v.Check(validate.NotBlank(d.Description) && validate.MaxLen(d.Description, 5000), "description", "La descrizione è obbligatoria (massimo 5000 caratteri)")
+
+	amenities, ok := shared.NormalizeKeys(shared.Amenities, in.Amenities)
+	v.Check(ok, "amenities", "Servizio non valido")
+	d.Amenities = amenities
+
+	v.Check(in.BillsIncluded != nil, "billsIncluded", "Indica se le spese sono incluse nel prezzo")
+	if in.BillsIncluded != nil {
+		d.BillsIncluded = *in.BillsIncluded
+	}
+
+	if in.AvailableFrom != "" {
+		today := s.now().UTC().Truncate(24 * time.Hour)
+		ok := validate.DateBetween(in.AvailableFrom, today.AddDate(-1, 0, 0), today.AddDate(2, 0, 0))
+		v.Check(ok, "availableFrom", "La data di disponibilità deve essere entro i prossimi due anni")
+		if ok {
+			date, _ := time.Parse(time.DateOnly, in.AvailableFrom)
+			d.AvailableFrom = &date
+		}
+	}
+
+	return d, v.Err()
+}
+
+// Image è una foto di un annuncio.
+type Image struct {
+	ID  int    `json:"id"`
+	URL string `json:"url"`
+	// Srcset elenca le versioni della foto per <img srcset>; null per le foto senza versioni ridotte.
+	Srcset *string `json:"srcset"`
+}
+
+// image è la foto con il suo indirizzo e lo srcset, se le versioni ridotte ci sono.
+func (s *Service) image(id int, key string, widths []int32) Image {
+	img := Image{ID: id, URL: s.storage.PublicURL(key)}
+	if srcset := storage.Srcset(s.storage, key, widths); srcset != "" {
+		img.Srcset = &srcset
+	}
+	return img
+}
+
+// Summary è un annuncio negli elenchi.
+type Summary struct {
+	ID            int     `json:"id"`
+	Title         string  `json:"title"`
+	City          string  `json:"city"`
+	Zone          string  `json:"zone"`
+	RoomType      string  `json:"roomType"`
+	Price         int     `json:"price"`
+	BillsIncluded *bool   `json:"billsIncluded"`
+	AvailableFrom *string `json:"availableFrom"`
+	IsActive      bool    `json:"isActive"`
+	// Removed è vero se la moderazione ha rimosso l'annuncio: lo vede solo il proprietario.
+	Removed  bool    `json:"removed"`
+	CoverURL *string `json:"coverUrl"`
+	// CoverSrcset elenca le versioni della prima foto per <img srcset> (null se non ne ha).
+	CoverSrcset *string `json:"coverSrcset"`
+	// Saved: l'annuncio è tra i preferiti di chi guarda (sempre falso senza sessione).
+	Saved bool `json:"saved"`
+}
+
+// Owner è il proprietario dell'annuncio, come lo vedono gli altri utenti.
+type Owner struct {
+	FirstName string `json:"firstName"`
+}
+
+// Detail è il dettaglio di un annuncio.
+type Detail struct {
+	Summary
+	Description string   `json:"description"`
+	Amenities   []string `json:"amenities"`
+	Images      []Image  `json:"images"`
+	Owner       Owner    `json:"owner"`
+	// IsOwner indica se chi guarda è il proprietario (per mostrare "Modifica" invece di "Contatta").
+	IsOwner bool `json:"isOwner"`
+}
+
+func (s *Service) summary(r Row) Summary {
+	sum := Summary{
+		ID:            r.ID,
+		Title:         r.Title,
+		City:          r.City,
+		Zone:          r.Zone,
+		RoomType:      r.RoomType,
+		Price:         r.Price,
+		BillsIncluded: r.BillsIncluded,
+		IsActive:      r.IsActive,
+		Removed:       r.Removed,
+		Saved:         r.Saved,
+	}
+	if r.AvailableFrom != nil {
+		date := r.AvailableFrom.Format(time.DateOnly)
+		sum.AvailableFrom = &date
+	}
+	if r.CoverKey != nil {
+		if url := s.storage.PublicURL(*r.CoverKey); url != "" {
+			sum.CoverURL = &url
+		}
+		if srcset := storage.Srcset(s.storage, *r.CoverKey, r.CoverWidths); srcset != "" {
+			sum.CoverSrcset = &srcset
+		}
+	}
+	return sum
+}
+
+// ListParams sono i filtri dell'elenco pubblico, come arrivano nell'URL.
+type ListParams struct {
+	City, MaxPrice, RoomType, BillsIncluded, Sort, Cursor, Limit string
+}
+
+// Page è una pagina dell'elenco; NextCursor è null se non ci sono altri annunci.
+type Page struct {
+	Items      []Summary `json:"items"`
+	NextCursor *string   `json:"nextCursor"`
+}
+
+// List restituisce una pagina degli annunci attivi, filtrata e ordinata dal database (anomalia F17).
+func (s *Service) List(ctx context.Context, viewerID string, p ListParams) (Page, error) {
+	q := ListQuery{ViewerID: viewerID, City: p.City, Sort: SortRecent, Limit: defaultLimit}
+
+	var v validate.Validator
+	v.Check(q.City == "" || shared.IsCity(q.City), "city", "Città non valida")
+	if p.RoomType != "" {
+		v.Check(validate.OneOf(p.RoomType, "singola", "doppia"), "roomType", "Tipo di stanza non valido")
+		q.RoomType = p.RoomType
+	}
+	if p.MaxPrice != "" {
+		maxPrice, err := strconv.Atoi(p.MaxPrice)
+		v.Check(err == nil && validate.Between(maxPrice, 1, 20000), "maxPrice", "Il budget deve essere compreso tra 1 e 20.000 €")
+		q.MaxPrice = maxPrice
+	}
+	if p.BillsIncluded != "" {
+		included := p.BillsIncluded == "true"
+		v.Check(p.BillsIncluded == "true" || p.BillsIncluded == "false", "billsIncluded", "Filtro sulle spese non valido")
+		q.BillsIncluded = &included
+	}
+	if p.Sort != "" {
+		_, known := listOrders[p.Sort]
+		v.Check(known, "sort", "Ordinamento non valido")
+		if known {
+			q.Sort = p.Sort
+		}
+	}
+	if p.Limit != "" {
+		limit, err := strconv.Atoi(p.Limit)
+		v.Check(err == nil && validate.Between(limit, 1, maxLimit), "limit", fmt.Sprintf("Il numero di annunci per pagina deve essere tra 1 e %d", maxLimit))
+		q.Limit = limit
+	}
+	if p.Cursor != "" {
+		after, ok := decodeListCursor(q.Sort, p.Cursor)
+		v.Check(ok, "cursor", "Pagina non valida: ricarica l'elenco")
+		q.After = &after
+	}
+	if err := v.Err(); err != nil {
+		return Page{}, err
+	}
+
+	// Un annuncio in più dice se esiste la pagina successiva
+	limit := q.Limit
+	q.Limit++
+	rows, err := s.store.Active(ctx, q)
+	if err != nil {
+		return Page{}, fmt.Errorf("elenco annunci: %w", err)
+	}
+
+	page := Page{Items: []Summary{}}
+	if len(rows) > limit {
+		rows = rows[:limit]
+		cursor := encodeListCursor(q.Sort, rows[limit-1])
+		page.NextCursor = &cursor
+	}
+	page.Items = s.summaries(rows)
+	return page, nil
+}
+
+// Il cursore contiene la chiave di ordinamento (data o prezzo) e l'ID dell'ultimo annuncio mostrato.
+func encodeListCursor(sort string, r Row) string {
+	key, id := cursorFields(sort, &ListCursor{CreatedAt: r.CreatedAt, Price: r.Price, ID: r.ID})
+	return page.Encode(key, id)
+}
+
+func decodeListCursor(sort, cursor string) (ListCursor, bool) {
+	fields, ok := page.Decode(cursor, 2)
+	if !ok {
+		return ListCursor{}, false
+	}
+	id, ok := validate.PositiveID(fields[1])
+	if !ok {
+		return ListCursor{}, false
+	}
+	c := ListCursor{ID: id}
+	switch sort {
+	case SortPriceAsc, SortPriceDesc:
+		price, err := strconv.Atoi(fields[0])
+		if err != nil {
+			return ListCursor{}, false
+		}
+		c.Price = price
+	default:
+		// Campo vuoto: l'ultimo annuncio mostrato non aveva data di creazione
+		if fields[0] != "" {
+			created, err := time.Parse(cursorTimeLayout, fields[0])
+			if err != nil {
+				return ListCursor{}, false
+			}
+			c.CreatedAt = &created
+		}
+	}
+	return c, true
+}
+
+// Mine restituisce tutti gli annunci dell'utente, anche quelli disattivati.
+func (s *Service) Mine(ctx context.Context, userID string) ([]Summary, error) {
+	rows, err := s.store.ByOwner(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("elenco annunci dell'utente: %w", err)
+	}
+	return s.summaries(rows), nil
+}
+
+func (s *Service) summaries(rows []Row) []Summary {
+	result := make([]Summary, 0, len(rows))
+	for _, r := range rows {
+		result = append(result, s.summary(r))
+	}
+	return result
+}
+
+// Get restituisce il dettaglio di un annuncio. Un annuncio disattivato è visibile solo al proprietario.
+func (s *Service) Get(ctx context.Context, viewerID, rawID string) (Detail, error) {
+	id, ok := validate.PositiveID(rawID)
+	if !ok {
+		return Detail{}, errNotFound
+	}
+	r, err := s.store.Get(ctx, id)
+	if db.IsNoRows(err) {
+		return Detail{}, errNotFound
+	}
+	if err != nil {
+		return Detail{}, fmt.Errorf("lettura annuncio: %w", err)
+	}
+	isOwner := viewerID != "" && viewerID == r.OwnerID
+	if !isOwner {
+		visible, err := s.visible(ctx, viewerID, r)
+		if err != nil {
+			return Detail{}, err
+		}
+		if !visible {
+			return Detail{}, errNotFound
+		}
+	}
+
+	images, err := s.store.Images(ctx, id)
+	if err != nil {
+		return Detail{}, fmt.Errorf("lettura foto: %w", err)
+	}
+	if viewerID != "" {
+		if r.Saved, err = s.store.IsSaved(ctx, viewerID, id); err != nil {
+			return Detail{}, fmt.Errorf("lettura preferiti: %w", err)
+		}
+	}
+	detail := Detail{
+		Summary:     s.summary(r),
+		Description: r.Description,
+		Amenities:   r.Amenities,
+		Images:      []Image{},
+		Owner:       Owner{FirstName: r.OwnerFirstName},
+		IsOwner:     isOwner,
+	}
+	if detail.Amenities == nil {
+		detail.Amenities = []string{}
+	}
+	for _, img := range images {
+		if s.storage.PublicURL(img.Key) != "" {
+			detail.Images = append(detail.Images, s.image(img.ID, img.Key, img.Widths))
+		}
+	}
+	return detail, nil
+}
+
+// visible dice se chi non è il proprietario può vedere l'annuncio: deve essere attivo, non rimosso,
+// di un account non sospeso e senza blocchi tra i due. Gli amministratori lo vedono comunque.
+func (s *Service) visible(ctx context.Context, viewerID string, r Row) (bool, error) {
+	hidden := !r.IsActive || r.Removed || r.OwnerSuspended
+	if !hidden {
+		relation, err := s.moderation.Relation(ctx, viewerID, r.OwnerID)
+		if err != nil {
+			return false, fmt.Errorf("verifica blocchi: %w", err)
+		}
+		hidden = relation.Blocked()
+	}
+	if !hidden {
+		return true, nil
+	}
+	admin, err := s.moderation.IsAdmin(ctx, viewerID)
+	if err != nil {
+		return false, fmt.Errorf("verifica amministratore: %w", err)
+	}
+	return admin, nil
+}
+
+// Create pubblica un annuncio e ne restituisce il dettaglio.
+func (s *Service) Create(ctx context.Context, userID string, in Input) (Detail, error) {
+	userType, err := s.store.UserType(ctx, userID)
+	if db.IsNoRows(err) || db.IsInvalidInput(err) {
+		return Detail{}, errSessionInvalid
+	}
+	if err != nil {
+		return Detail{}, fmt.Errorf("lettura tipo di utente: %w", err)
+	}
+	if userType != landlordUserType {
+		return Detail{}, errNotLandlordCreate
+	}
+
+	data, err := s.parseInput(in)
+	if err != nil {
+		return Detail{}, err
+	}
+	id, err := s.store.Create(ctx, userID, data, !in.Draft)
+	if err != nil {
+		return Detail{}, apperr.Wrap(err, "listing_create_failed", "Impossibile pubblicare l'annuncio. Controlla i dati e riprova.")
+	}
+	return s.Get(ctx, userID, strconv.Itoa(id))
+}
+
+// requireOwner verifica che l'annuncio esista e sia dell'utente. Gestire i propri annunci
+// (modificarli, disattivarli, eliminarli) non richiede il ruolo "affitta": chi cambia ruolo
+// deve poter comunque ritirare gli annunci pubblicati. Un annuncio rimosso dalla moderazione
+// si può solo eliminare (con le sue foto).
+func (s *Service) requireOwner(ctx context.Context, userID, rawID string) (int, error) {
+	return s.owned(ctx, userID, rawID, true)
+}
+
+// requireEditable è requireOwner per le modifiche: rifiuta gli annunci rimossi dalla moderazione.
+func (s *Service) requireEditable(ctx context.Context, userID, rawID string) (int, error) {
+	return s.owned(ctx, userID, rawID, false)
+}
+
+func (s *Service) owned(ctx context.Context, userID, rawID string, allowRemoved bool) (int, error) {
+	id, ok := validate.PositiveID(rawID)
+	if !ok {
+		return 0, errNotFound
+	}
+	ownerID, removed, err := s.store.Owner(ctx, id)
+	if db.IsNoRows(err) {
+		return 0, errNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("lettura proprietario: %w", err)
+	}
+	if ownerID != userID {
+		return 0, errNotOwner
+	}
+	if removed && !allowRemoved {
+		return 0, errRemoved
+	}
+	return id, nil
+}
+
+// Update modifica un annuncio e ne restituisce il dettaglio aggiornato.
+func (s *Service) Update(ctx context.Context, userID, rawID string, in Input) (Detail, error) {
+	id, err := s.requireEditable(ctx, userID, rawID)
+	if err != nil {
+		return Detail{}, err
+	}
+	data, err := s.parseInput(in)
+	if err != nil {
+		return Detail{}, err
+	}
+	if err := s.store.Update(ctx, id, data); err != nil {
+		return Detail{}, apperr.Wrap(err, "listing_update_failed", "Impossibile salvare l'annuncio. Controlla i dati e riprova.")
+	}
+	return s.Get(ctx, userID, rawID)
+}
+
+// SetActive pubblica o ritira un annuncio senza eliminarlo.
+func (s *Service) SetActive(ctx context.Context, userID, rawID string, active bool) error {
+	id, err := s.requireEditable(ctx, userID, rawID)
+	if err != nil {
+		return err
+	}
+	if err := s.store.SetActive(ctx, id, active); err != nil {
+		return apperr.Wrap(err, "listing_update_failed", "Impossibile aggiornare l'annuncio")
+	}
+	return nil
+}
+
+// Delete elimina un annuncio e le sue foto. Le conversazioni collegate restano ai partecipanti.
+func (s *Service) Delete(ctx context.Context, userID, rawID string) error {
+	id, err := s.requireOwner(ctx, userID, rawID)
+	if err != nil {
+		return err
+	}
+	keys, err := s.store.Delete(ctx, id)
+	if err != nil {
+		return apperr.Wrap(err, "listing_delete_failed", "Impossibile eliminare l'annuncio in questo momento")
+	}
+	DeleteObjects(ctx, s.storage, keys)
+	return nil
+}
+
+// DeleteObjects cancella dallo storage le foto di annunci già eliminati dal database.
+// Un errore lascia un file orfano ma non annulla l'eliminazione: finisce solo nei log.
+func DeleteObjects(ctx context.Context, st storage.Storage, keys []string) {
+	for _, key := range keys {
+		if err := st.Delete(ctx, key); err != nil {
+			logx.From(ctx).Warn("foto non eliminata dallo storage", "key", key, "err", err)
+		}
+	}
+}
+
+// UploadInput chiede di caricare una foto del tipo indicato.
+type UploadInput struct {
+	ContentType string `json:"contentType"`
+}
+
+// PendingUpload autorizza il browser a caricare una foto direttamente sullo storage, insieme alle
+// sue versioni ridotte (facoltative: senza, la foto resta solo nella misura originale).
+type PendingUpload struct {
+	Key      string            `json:"key"`
+	URL      string            `json:"url"`
+	Headers  map[string]string `json:"headers"`
+	MaxBytes int               `json:"maxBytes"`
+	Variants []PendingVariant  `json:"variants"`
+}
+
+// PendingVariant autorizza il caricamento della versione larga Width di una foto, in JPEG.
+type PendingVariant struct {
+	Width   int               `json:"width"`
+	Key     string            `json:"key"`
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers"`
+}
+
+// PrepareUpload firma il caricamento di una foto. Il file finisce in "pending/": diventa una foto
+// dell'annuncio solo dopo ConfirmUpload (una regola di scadenza sul bucket elimina quelli abbandonati).
+func (s *Service) PrepareUpload(ctx context.Context, userID, rawID string, in UploadInput) (PendingUpload, error) {
+	id, err := s.requireEditable(ctx, userID, rawID)
+	if err != nil {
+		return PendingUpload{}, err
+	}
+	imageType, ok := imageTypes[in.ContentType]
+	if !ok {
+		return PendingUpload{}, apperr.BadRequest("invalid_image_type", "Formato non supportato: usa foto JPEG, PNG o WebP")
+	}
+	count, err := s.store.CountImages(ctx, id)
+	if err != nil {
+		return PendingUpload{}, fmt.Errorf("conteggio foto: %w", err)
+	}
+	if count >= MaxImages {
+		return PendingUpload{}, errTooManyImagesResponse
+	}
+
+	key := fmt.Sprintf("pending/%d/%s.%s", id, randomName(), imageType.ext)
+	upload, err := s.storage.PresignUpload(ctx, key, in.ContentType, uploadURLExpires)
+	if errors.Is(err, storage.ErrDisabled) {
+		return PendingUpload{}, errStorageDisabled
+	}
+	if err != nil {
+		return PendingUpload{}, fmt.Errorf("firma del caricamento: %w", err)
+	}
+	pending := PendingUpload{Key: key, URL: upload.URL, Headers: upload.Headers, MaxBytes: MaxImageBytes, Variants: []PendingVariant{}}
+	for _, width := range storage.VariantWidths {
+		variantKey := storage.VariantKey(key, width)
+		variant, err := s.storage.PresignUpload(ctx, variantKey, "image/jpeg", uploadURLExpires)
+		if err != nil {
+			return PendingUpload{}, fmt.Errorf("firma del caricamento: %w", err)
+		}
+		pending.Variants = append(pending.Variants, PendingVariant{Width: width, Key: variantKey, URL: variant.URL, Headers: variant.Headers})
+	}
+	return pending, nil
+}
+
+// confirmVariants sposta accanto alla foto le versioni ridotte caricate e valide, e ne
+// restituisce le larghezze. Una versione mancante o non valida non blocca la foto: si scarta.
+func (s *Service) confirmVariants(ctx context.Context, pendingKey, finalKey string) []int32 {
+	widths := []int32{}
+	jpeg := imageTypes["image/jpeg"]
+	for _, width := range storage.VariantWidths {
+		from := storage.VariantKey(pendingKey, width)
+		info, err := s.storage.Stat(ctx, from)
+		if err != nil {
+			continue
+		}
+		head, err := s.storage.ReadPrefix(ctx, from, 12)
+		if err != nil || info.Size > MaxImageBytes || info.ContentType != "image/jpeg" || !jpeg.magic(head) {
+			DeleteObjects(ctx, s.storage, []string{from})
+			continue
+		}
+		if err := s.storage.Move(ctx, from, storage.VariantKey(finalKey, width)); err != nil {
+			logx.From(ctx).Warn("versione ridotta della foto non spostata", "key", from, "err", err)
+			continue
+		}
+		widths = append(widths, int32(width)) // #nosec G115 -- larghezze fisse di storage.VariantWidths (480, 960)
+	}
+	return widths
+}
+
+var errTooManyImagesResponse = apperr.Conflict("too_many_images", fmt.Sprintf("Puoi caricare al massimo %d foto per annuncio", MaxImages))
+
+// pendingKey riconosce le chiavi generate da PrepareUpload: pending/<annuncio>/<32 cifre esadecimali>.<estensione>
+var pendingKey = regexp.MustCompile(`^pending/(\d+)/([0-9a-f]{32})\.(jpg|png|webp)$`)
+
+// ConfirmInput indica il file caricato da aggiungere alle foto.
+type ConfirmInput struct {
+	Key string `json:"key"`
+}
+
+// ConfirmUpload verifica il file caricato (esistenza, dimensione, formato reale) e lo aggiunge
+// alle foto dell'annuncio. Un file non valido viene eliminato.
+func (s *Service) ConfirmUpload(ctx context.Context, userID, rawID string, in ConfirmInput) (Image, error) {
+	id, err := s.requireEditable(ctx, userID, rawID)
+	if err != nil {
+		return Image{}, err
+	}
+	match := pendingKey.FindStringSubmatch(in.Key)
+	if match == nil || match[1] != strconv.Itoa(id) {
+		return Image{}, apperr.BadRequest("invalid_upload", "Caricamento non valido")
+	}
+
+	info, err := s.storage.Stat(ctx, in.Key)
+	switch {
+	case errors.Is(err, storage.ErrDisabled):
+		return Image{}, errStorageDisabled
+	case errors.Is(err, storage.ErrNotFound):
+		return Image{}, apperr.BadRequest("upload_not_found", "Foto non ricevuta: riprova il caricamento")
+	case err != nil:
+		return Image{}, fmt.Errorf("verifica del file caricato: %w", err)
+	}
+
+	reject := func(message string) (Image, error) {
+		DeleteObjects(ctx, s.storage, []string{in.Key})
+		return Image{}, apperr.BadRequest("invalid_image", message)
+	}
+	if info.Size > MaxImageBytes {
+		return reject(fmt.Sprintf("La foto supera il limite di %d MB", MaxImageBytes>>20))
+	}
+	imageType, ok := imageTypes[info.ContentType]
+	if !ok || imageType.ext != match[3] {
+		return reject("Formato non supportato: usa foto JPEG, PNG o WebP")
+	}
+	head, err := s.storage.ReadPrefix(ctx, in.Key, 12)
+	if err != nil {
+		return Image{}, fmt.Errorf("lettura del file caricato: %w", err)
+	}
+	if !imageType.magic(head) {
+		return reject("Il file non è un'immagine valida")
+	}
+
+	finalKey := fmt.Sprintf("listings/%d/%s.%s", id, match[2], match[3])
+	if err := s.storage.Move(ctx, in.Key, finalKey); err != nil {
+		return Image{}, fmt.Errorf("spostamento della foto: %w", err)
+	}
+	widths := s.confirmVariants(ctx, in.Key, finalKey)
+	img, err := s.store.AddImage(ctx, id, finalKey, widths, MaxImages)
+	if err != nil {
+		DeleteObjects(ctx, s.storage, storage.ImageKeys(finalKey, widths))
+		if errors.Is(err, errTooManyImages) {
+			return Image{}, errTooManyImagesResponse
+		}
+		return Image{}, fmt.Errorf("salvataggio della foto: %w", err)
+	}
+	return s.image(img.ID, finalKey, widths), nil
+}
+
+// DeleteImage elimina una foto dell'annuncio.
+func (s *Service) DeleteImage(ctx context.Context, userID, rawID, rawImageID string) error {
+	id, err := s.requireOwner(ctx, userID, rawID)
+	if err != nil {
+		return err
+	}
+	imageID, ok := validate.PositiveID(rawImageID)
+	if !ok {
+		return errImageNotFound
+	}
+	keys, err := s.store.DeleteImage(ctx, id, imageID)
+	if db.IsNoRows(err) {
+		return errImageNotFound
+	}
+	if err != nil {
+		return apperr.Wrap(err, "image_delete_failed", "Impossibile eliminare la foto")
+	}
+	DeleteObjects(ctx, s.storage, keys)
+	return nil
+}
+
+func randomName() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+// Save aggiunge l'annuncio ai preferiti. Si possono salvare solo gli annunci che si vedono.
+func (s *Service) Save(ctx context.Context, userID, rawID string) error {
+	id, ok := validate.PositiveID(rawID)
+	if !ok {
+		return errNotFound
+	}
+	r, err := s.store.Get(ctx, id)
+	if db.IsNoRows(err) {
+		return errNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("lettura annuncio: %w", err)
+	}
+	if r.OwnerID != userID {
+		visible, err := s.visible(ctx, userID, r)
+		if err != nil {
+			return err
+		}
+		if !visible {
+			return errNotFound
+		}
+	}
+	if err := s.store.Save(ctx, userID, id); err != nil {
+		return fmt.Errorf("salvataggio preferito: %w", err)
+	}
+	return nil
+}
+
+// Unsave toglie l'annuncio dai preferiti; togliere un annuncio che non c'è non è un errore.
+func (s *Service) Unsave(ctx context.Context, userID, rawID string) error {
+	id, ok := validate.PositiveID(rawID)
+	if !ok {
+		return errNotFound
+	}
+	if err := s.store.Unsave(ctx, userID, id); err != nil {
+		return fmt.Errorf("rimozione preferito: %w", err)
+	}
+	return nil
+}
+
+// Saved restituisce una pagina dei preferiti, dal salvato più di recente.
+func (s *Service) Saved(ctx context.Context, userID, cursor, rawLimit string) (Page, error) {
+	limit := defaultLimit
+	var after *SavedCursor
+	var v validate.Validator
+	if rawLimit != "" {
+		n, err := strconv.Atoi(rawLimit)
+		v.Check(err == nil && validate.Between(n, 1, maxLimit), "limit", fmt.Sprintf("Il numero di annunci per pagina deve essere tra 1 e %d", maxLimit))
+		limit = n
+	}
+	if cursor != "" {
+		c, ok := decodeSavedCursor(cursor)
+		v.Check(ok, "cursor", "Pagina non valida: ricarica l'elenco")
+		after = &c
+	}
+	if err := v.Err(); err != nil {
+		return Page{}, err
+	}
+
+	rows, err := s.store.SavedListings(ctx, userID, after, limit+1)
+	if err != nil {
+		return Page{}, fmt.Errorf("elenco preferiti: %w", err)
+	}
+	result := Page{Items: []Summary{}}
+	if len(rows) > limit {
+		rows = rows[:limit]
+		last := rows[limit-1]
+		next := page.Encode(last.SavedAt.UTC().Format(time.RFC3339Nano), strconv.Itoa(last.ID))
+		result.NextCursor = &next
+	}
+	for _, r := range rows {
+		result.Items = append(result.Items, s.summary(r.Row))
+	}
+	return result, nil
+}
+
+func decodeSavedCursor(cursor string) (SavedCursor, bool) {
+	fields, ok := page.Decode(cursor, 2)
+	if !ok {
+		return SavedCursor{}, false
+	}
+	savedAt, err := time.Parse(time.RFC3339Nano, fields[0])
+	id, validID := validate.PositiveID(fields[1])
+	if err != nil || !validID {
+		return SavedCursor{}, false
+	}
+	return SavedCursor{SavedAt: savedAt, ListingID: id}, true
+}
+
+// maxCities è quante città mostra la home.
+const maxCities = 12
+
+// Cities restituisce le città con annunci visibili a chi guarda, dalla più ricca di annunci.
+func (s *Service) Cities(ctx context.Context, viewerID string) ([]CityCount, error) {
+	cities, err := s.store.Cities(ctx, viewerID, maxCities)
+	if err != nil {
+		return nil, fmt.Errorf("città con annunci: %w", err)
+	}
+	if cities == nil {
+		cities = []CityCount{}
+	}
+	return cities, nil
+}

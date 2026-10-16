@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1791966406577,
+      "tag": "0000_soft_scalphunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792033342199,
+      "tag": "0001_icy_sentinels",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792050233858,
+      "tag": "0002_keen_zemo",
+      "breakpoints": true
+    }
+  ]
+}

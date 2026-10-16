@@ -1,0 +1,75 @@
+import PageMeta from '../components/PageMeta';
+import { Link, useNavigate } from 'react-router-dom';
+
+export default function Terms() {
+  const navigate = useNavigate();
+
+  return (
+    <div className="bg-background font-sans text-foreground py-12 px-6 selection:bg-primary/25">
+      <PageMeta
+        title="Termini di Servizio | RoomDate"
+        description="Le regole per usare RoomDate: ruolo della piattaforma, requisiti, regole di condotta e responsabilità di chi pubblica e di chi cerca."
+      />
+
+      <div className="max-w-3xl mx-auto bg-surface p-8 md:p-12 rounded-3xl shadow-xs border border-line relative overflow-hidden">
+        
+        {/* Sottile orb decorativo */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-400/5 blur-[80px] rounded-full pointer-events-none"></div>
+
+        {/* Bottone Indietro */}
+        <button 
+          onClick={() => navigate(-1)} 
+          className="mb-8 bg-background border border-line hover:bg-surface-muted text-foreground-muted px-5 py-2.5 rounded-full text-sm font-bold transition-all cursor-pointer shadow-xs"
+        >
+          ← Torna indietro
+        </button>
+        
+        <h1 className="font-serif text-3xl md:text-4xl font-extrabold text-foreground mb-2 tracking-tight">Termini di Servizio</h1>
+        <p className="text-sm text-foreground-subtle font-medium mb-8">Ultimo aggiornamento: Settembre 2026</p>
+
+        <div className="flex flex-col gap-8 leading-relaxed text-foreground-muted font-medium">
+          <section className="bg-background p-6 rounded-3xl border border-line">
+            <h2 className="font-serif text-xl font-extrabold text-foreground mb-3">1. Ruolo della Piattaforma</h2>
+            <p className="text-foreground-muted">
+              RoomDate opera esclusivamente come fornitore di servizi della società dell&apos;informazione (intermediario tecnico). La piattaforma mette a disposizione una bacheca digitale per facilitare l&apos;incontro tra utenti che offrono e cercano stanze. <strong>RoomDate non è un&apos;agenzia immobiliare</strong>, non interviene in alcun modo nelle trattative, non percepisce percentuali sugli affitti e non è parte dei contratti stipulati tra gli utenti.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="font-serif text-xl font-extrabold text-foreground mb-3">2. Requisiti</h2>
+            <p>
+              Per registrarti devi avere compiuto 18 anni e indicare dati veritieri, compresa la data di nascita.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="font-serif text-xl font-extrabold text-foreground mb-3">3. Esclusione di Responsabilità</h2>
+            <p>
+              RoomDate declina ogni responsabilità per eventuali danni, truffe, perdite economiche, controversie o illeciti derivanti dalle interazioni tra gli utenti, sia all&apos;interno dell&apos;applicazione (es. chat) che nella vita reale. L&apos;utente si assume la totale e completa responsabilità di verificare l&apos;identità dell&apos;interlocutore, l&apos;autenticità degli annunci e la validità legale di eventuali accordi economici o contratti di locazione.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="font-serif text-xl font-extrabold text-foreground mb-3">4. Regole di Condotta</h2>
+            <p className="mb-3">
+              Gli utenti si impegnano a pubblicare informazioni veritiere e a mantenere un comportamento rispettoso. È severamente vietato utilizzare RoomDate per:
+            </p>
+            <ul className="list-disc pl-5 flex flex-col gap-2 mb-4 text-foreground-muted">
+              <li>Pubblicare annunci falsi, ingannevoli o discriminatori.</li>
+              <li>Richiedere pagamenti anticipati fraudolenti o fuori dalle normali prassi legali di locazione.</li>
+              <li>Inviare messaggi offensivi, spam o contenuti non appropriati.</li>
+            </ul>
+            <p>
+              Chiunque noti una violazione può segnalare l&apos;utente o l&apos;annuncio dal profilo, dall&apos;annuncio o dalla chat, e bloccare chi lo disturba. Gli amministratori di RoomDate esaminano le segnalazioni e, se riscontrano una violazione, possono rimuovere l&apos;annuncio o sospendere l&apos;account, che non potrà più accedere. RoomDate può fornire la documentazione in suo possesso alle autorità competenti, se richiesta dalla legge.
+            </p>
+          </section>
+        </div>
+
+        <div className="mt-12 pt-8 border-t border-line text-center">
+          <Link to="/" className="text-primary font-bold hover:text-primary transition-colors inline-block">Torna alla Home Page</Link>
+        </div>
+
+      </div>
+    </div>
+  );
+}

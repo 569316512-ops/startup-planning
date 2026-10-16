@@ -1,0 +1,499 @@
+// Package listings gestisce gli annunci delle stanze e le loro foto.
+package listings
+
+import (
+	"context"
+	"errors"
+	"strconv"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"roomdate-backend/internal/moderation"
+	"roomdate-backend/internal/storage"
+)
+
+// errTooManyImages indica che l'annuncio ha già il numero massimo di foto.
+var errTooManyImages = errors.New("troppe foto")
+
+// Store esegue le query su annunci e foto.
+type Store struct {
+	db *pgxpool.Pool
+}
+
+func NewStore(db *pgxpool.Pool) *Store {
+	return &Store{db: db}
+}
+
+// UserType restituisce il tipo di utente ("cerca" o "affitta") letto dal database.
+func (s *Store) UserType(ctx context.Context, userID string) (string, error) {
+	var userType string
+	err := s.db.QueryRow(ctx, `SELECT COALESCE(user_type, '') FROM roomdate_app.users WHERE id = $1`, userID).Scan(&userType)
+	return userType, err
+}
+
+// Data sono i campi modificabili di un annuncio, già validati e normalizzati.
+type Data struct {
+	Title, City, Zone, RoomType string
+	Price                       int
+	Description                 string
+	Amenities                   []string
+	BillsIncluded               bool
+	AvailableFrom               *time.Time
+}
+
+// Create salva un annuncio nuovo; active false lo crea non pubblicato (bozza).
+func (s *Store) Create(ctx context.Context, ownerID string, d Data, active bool) (int, error) {
+	var id int
+	err := s.db.QueryRow(ctx, `
+        INSERT INTO roomdate_app.listings
+            (user_id, title, city, zone, room_type, price, description, amenities, bills_included, available_from, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING id`,
+		ownerID, d.Title, d.City, d.Zone, d.RoomType, d.Price, d.Description, d.Amenities, d.BillsIncluded, d.AvailableFrom, active,
+	).Scan(&id)
+	return id, err
+}
+
+func (s *Store) Update(ctx context.Context, id int, d Data) error {
+	_, err := s.db.Exec(ctx, `
+        UPDATE roomdate_app.listings
+        SET title = $2, city = $3, zone = $4, room_type = $5, price = $6, description = $7,
+            amenities = $8, bills_included = $9, available_from = $10, updated_at = NOW()
+        WHERE id = $1`,
+		id, d.Title, d.City, d.Zone, d.RoomType, d.Price, d.Description, d.Amenities, d.BillsIncluded, d.AvailableFrom)
+	return err
+}
+
+func (s *Store) SetActive(ctx context.Context, id int, active bool) error {
+	_, err := s.db.Exec(ctx, `UPDATE roomdate_app.listings SET is_active = $2, updated_at = NOW() WHERE id = $1`, id, active)
+	return err
+}
+
+// Owner restituisce l'ID del proprietario dell'annuncio.
+// Owner restituisce il proprietario dell'annuncio e se la moderazione l'ha rimosso.
+func (s *Store) Owner(ctx context.Context, id int) (ownerID string, removed bool, err error) {
+	err = s.db.QueryRow(ctx, `SELECT COALESCE(user_id::text, ''), removed_at IS NOT NULL FROM roomdate_app.listings WHERE id = $1`, id).
+		Scan(&ownerID, &removed)
+	return ownerID, removed, err
+}
+
+// Row è un annuncio con tutti i campi.
+type Row struct {
+	ID                          int
+	OwnerID, OwnerFirstName     string
+	Title, City, Zone, RoomType string
+	Price                       int
+	Description                 string
+	Amenities                   []string
+	BillsIncluded               *bool
+	AvailableFrom               *time.Time
+	IsActive                    bool
+	// Removed: rimosso dalla moderazione. OwnerSuspended: il proprietario è sospeso.
+	Removed, OwnerSuspended bool
+	// CreatedAt serve a costruire il cursore dell'elenco; è NULL su qualche annuncio vecchio.
+	CreatedAt *time.Time
+	// CoverKey è la chiave della prima foto, se c'è (negli elenchi); CoverWidths le larghezze
+	// delle sue versioni ridotte.
+	CoverKey    *string
+	CoverWidths []int32
+	// Saved: chi guarda ha l'annuncio tra i preferiti (negli elenchi; sempre falso senza sessione).
+	Saved bool
+}
+
+// Nel database di produzione user_id, room_type e created_at possono essere NULL.
+const rowColumns = `l.id, COALESCE(l.user_id::text, ''), COALESCE(u.first_name, ''),
+    l.title, l.city, COALESCE(l.zone, ''), COALESCE(l.room_type, ''), l.price, COALESCE(l.description, ''),
+    l.amenities, l.bills_included, l.available_from, l.is_active,
+    l.removed_at IS NOT NULL, COALESCE(u.suspended_at IS NOT NULL, false), l.created_at,
+    (SELECT i.storage_key FROM roomdate_app.listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1),
+    COALESCE((SELECT i.widths FROM roomdate_app.listing_images i WHERE i.listing_id = l.id ORDER BY i.position, i.id LIMIT 1), '{}')`
+
+// savedColumn dice se l'annuncio è tra i preferiti dell'utente nel parametro viewer (vuoto: nessuno).
+func savedColumn(viewer string) string {
+	return `EXISTS (SELECT 1 FROM roomdate_app.saved_listings s
+        WHERE s.listing_id = l.id AND s.user_id = NULLIF(` + viewer + `, '')::uuid)`
+}
+
+// scanRow legge le colonne di rowColumns, poi quella dei preferiti e le eventuali altre in extra.
+func scanRow(row pgx.Row, extra ...any) (Row, error) {
+	var r Row
+	dest := []any{&r.ID, &r.OwnerID, &r.OwnerFirstName, &r.Title, &r.City, &r.Zone, &r.RoomType, &r.Price, &r.Description,
+		&r.Amenities, &r.BillsIncluded, &r.AvailableFrom, &r.IsActive, &r.Removed, &r.OwnerSuspended, &r.CreatedAt, &r.CoverKey, &r.CoverWidths, &r.Saved}
+	err := row.Scan(append(dest, extra...)...)
+	return r, err
+}
+
+func (s *Store) Get(ctx context.Context, id int) (Row, error) {
+	return scanRow(s.db.QueryRow(ctx, `
+        SELECT `+rowColumns+`, false
+        FROM roomdate_app.listings l
+        LEFT JOIN roomdate_app.users u ON l.user_id = u.id
+        WHERE l.id = $1`, id))
+}
+
+// Ordinamenti ammessi per l'elenco pubblico degli annunci.
+const (
+	SortRecent    = "recenti"
+	SortPriceAsc  = "prezzo"
+	SortPriceDesc = "prezzo-desc"
+)
+
+// ListQuery filtra, ordina e pagina l'elenco pubblico degli annunci.
+// I campi vuoti o a zero non filtrano nulla.
+type ListQuery struct {
+	// ViewerID è chi guarda ('' senza sessione): non vede gli annunci di chi ha bloccato o
+	// di chi l'ha bloccato.
+	ViewerID      string
+	City          string
+	MaxPrice      int
+	RoomType      string
+	BillsIncluded *bool
+	Sort          string
+	// After è la posizione dell'ultimo annuncio della pagina precedente, nil per la prima pagina.
+	After *ListCursor
+	Limit int
+}
+
+// ListCursor è la posizione di un annuncio nell'ordinamento scelto: la chiave di ordinamento e l'ID.
+// CreatedAt è nil per gli annunci senza data di creazione, che vengono per ultimi.
+type ListCursor struct {
+	CreatedAt *time.Time
+	Price     int
+	ID        int
+}
+
+// Formato della data nel cursore: senza fuso orario, come la colonna created_at.
+const cursorTimeLayout = "2006-01-02T15:04:05.999999"
+
+// Keyset e ordinamento per ciascun ordine. Gli annunci senza data di creazione stanno in fondo,
+// e l'ID (crescente con il tempo) separa quelli a pari valore.
+var listOrders = map[string]struct{ keyset, orderBy string }{
+	SortRecent: {
+		keyset: `($6 = '' OR CASE WHEN $5 = ''
+                 THEN l.created_at IS NULL AND l.id < NULLIF($6, '')::int
+                 ELSE l.created_at IS NULL OR l.created_at < NULLIF($5, '')::timestamp
+                      OR (l.created_at = NULLIF($5, '')::timestamp AND l.id < NULLIF($6, '')::int) END)`,
+		orderBy: `l.created_at DESC NULLS LAST, l.id DESC`,
+	},
+	SortPriceAsc: {
+		keyset:  `($6 = '' OR (l.price, l.id) > (NULLIF($5, '')::int, NULLIF($6, '')::int))`,
+		orderBy: `l.price ASC, l.id ASC`,
+	},
+	SortPriceDesc: {
+		keyset:  `($6 = '' OR (l.price, l.id) < (NULLIF($5, '')::int, NULLIF($6, '')::int))`,
+		orderBy: `l.price DESC, l.id DESC`,
+	},
+}
+
+// cursorFields converte il cursore nei due valori attesi dalla query ("" quando manca).
+func cursorFields(sort string, c *ListCursor) (key, id string) {
+	if c == nil {
+		return "", ""
+	}
+	switch sort {
+	case SortPriceAsc, SortPriceDesc:
+		key = strconv.Itoa(c.Price)
+	default:
+		if c.CreatedAt != nil {
+			key = c.CreatedAt.UTC().Format(cursorTimeLayout)
+		}
+	}
+	return key, strconv.Itoa(c.ID)
+}
+
+// Active restituisce una pagina degli annunci attivi, filtrata e ordinata.
+func (s *Store) Active(ctx context.Context, q ListQuery) ([]Row, error) {
+	order, ok := listOrders[q.Sort]
+	if !ok {
+		order = listOrders[SortRecent]
+	}
+	key, id := cursorFields(q.Sort, q.After)
+	return s.list(ctx, `
+        SELECT `+rowColumns+`, `+savedColumn("$8")+`
+        FROM roomdate_app.listings l
+        LEFT JOIN roomdate_app.users u ON l.user_id = u.id
+        WHERE `+visibleToViewer("$8")+`
+          AND ($1 = '' OR l.city = $1)
+          AND ($2 = 0 OR l.price <= $2)
+          AND ($3 = '' OR l.room_type = $3)
+          AND ($4::boolean IS NULL OR l.bills_included = $4)
+          AND `+order.keyset+`
+        ORDER BY `+order.orderBy+`
+        LIMIT $7`,
+		q.City, q.MaxPrice, q.RoomType, q.BillsIncluded, key, id, q.Limit, q.ViewerID)
+}
+
+// ByOwner restituisce tutti gli annunci di un utente, anche quelli disattivati, dal più recente.
+func (s *Store) ByOwner(ctx context.Context, ownerID string) ([]Row, error) {
+	return s.list(ctx, `
+        SELECT `+rowColumns+`, false
+        FROM roomdate_app.listings l
+        LEFT JOIN roomdate_app.users u ON l.user_id = u.id
+        WHERE l.user_id = $1
+        ORDER BY l.created_at DESC`, ownerID)
+}
+
+func (s *Store) list(ctx context.Context, query string, args ...any) ([]Row, error) {
+	rows, err := s.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []Row
+	for rows.Next() {
+		r, err := scanRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
+}
+
+// Delete elimina l'annuncio (le foto nel database vanno via a cascata) e restituisce le chiavi
+// delle foto, da cancellare anche dallo storage.
+func (s *Store) Delete(ctx context.Context, id int) ([]string, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	keys, err := imageKeys(ctx, tx, `SELECT storage_key, widths FROM roomdate_app.listing_images WHERE listing_id = $1`, id)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM roomdate_app.listings WHERE id = $1`, id); err != nil {
+		return nil, err
+	}
+	return keys, tx.Commit(ctx)
+}
+
+// ImageRow è una foto di un annuncio, con le larghezze delle sue versioni ridotte.
+type ImageRow struct {
+	ID     int
+	Key    string
+	Widths []int32
+}
+
+func (s *Store) Images(ctx context.Context, listingID int) ([]ImageRow, error) {
+	rows, err := s.db.Query(ctx, `
+        SELECT id, storage_key, widths FROM roomdate_app.listing_images
+        WHERE listing_id = $1
+        ORDER BY position, id`, listingID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	images := []ImageRow{}
+	for rows.Next() {
+		var img ImageRow
+		if err := rows.Scan(&img.ID, &img.Key, &img.Widths); err != nil {
+			return nil, err
+		}
+		images = append(images, img)
+	}
+	return images, rows.Err()
+}
+
+func (s *Store) CountImages(ctx context.Context, listingID int) (int, error) {
+	var n int
+	err := s.db.QueryRow(ctx, `SELECT count(*) FROM roomdate_app.listing_images WHERE listing_id = $1`, listingID).Scan(&n)
+	return n, err
+}
+
+// AddImage aggiunge una foto in coda. Blocca la riga dell'annuncio, così due caricamenti
+// contemporanei non superano il limite; restituisce errTooManyImages se l'annuncio è pieno.
+func (s *Store) AddImage(ctx context.Context, listingID int, key string, widths []int32, max int) (ImageRow, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return ImageRow{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM roomdate_app.listings WHERE id = $1 FOR UPDATE`, listingID); err != nil {
+		return ImageRow{}, err
+	}
+	var count, lastPosition int
+	err = tx.QueryRow(ctx, `
+        SELECT count(*), COALESCE(MAX(position), 0)
+        FROM roomdate_app.listing_images WHERE listing_id = $1`, listingID).Scan(&count, &lastPosition)
+	if err != nil {
+		return ImageRow{}, err
+	}
+	if count >= max {
+		return ImageRow{}, errTooManyImages
+	}
+
+	if widths == nil {
+		widths = []int32{}
+	}
+	img := ImageRow{Key: key, Widths: widths}
+	err = tx.QueryRow(ctx, `
+        INSERT INTO roomdate_app.listing_images (listing_id, storage_key, position, widths)
+        VALUES ($1, $2, $3, $4) RETURNING id`, listingID, key, lastPosition+1, widths).Scan(&img.ID)
+	if err != nil {
+		return ImageRow{}, err
+	}
+	return img, tx.Commit(ctx)
+}
+
+// DeleteImage elimina la foto dell'annuncio e ne restituisce le chiavi (originale e versioni
+// ridotte); pgx.ErrNoRows se non esiste.
+func (s *Store) DeleteImage(ctx context.Context, listingID, imageID int) ([]string, error) {
+	var key string
+	var widths []int32
+	err := s.db.QueryRow(ctx, `
+        DELETE FROM roomdate_app.listing_images
+        WHERE id = $1 AND listing_id = $2
+        RETURNING storage_key, widths`, imageID, listingID).Scan(&key, &widths)
+	return storage.ImageKeys(key, widths), err
+}
+
+// imageKeys legge le chiavi delle foto (colonne storage_key e widths) e aggiunge quelle delle
+// versioni ridotte: tutto quello da cancellare dallo storage.
+func imageKeys(ctx context.Context, q interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}, query string, args ...any) ([]string, error) {
+	rows, err := q.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	keys := []string{}
+	for rows.Next() {
+		var key string
+		var widths []int32
+		if err := rows.Scan(&key, &widths); err != nil {
+			return nil, err
+		}
+		keys = append(keys, storage.ImageKeys(key, widths)...)
+	}
+	return keys, rows.Err()
+}
+
+// visibleToViewer sono le condizioni per cui chi guarda (parametro viewer) vede un annuncio negli
+// elenchi: attivo, non rimosso, di un account non sospeso e senza blocchi tra i due.
+func visibleToViewer(viewer string) string {
+	return `l.is_active
+          AND l.removed_at IS NULL
+          AND u.suspended_at IS NULL
+          AND ` + moderation.NotBlockedSQL(viewer, "l.user_id")
+}
+
+// Save aggiunge l'annuncio ai preferiti dell'utente; se c'è già non cambia nulla.
+func (s *Store) Save(ctx context.Context, userID string, listingID int) error {
+	_, err := s.db.Exec(ctx, `
+        INSERT INTO roomdate_app.saved_listings (user_id, listing_id) VALUES ($1, $2)
+        ON CONFLICT (user_id, listing_id) DO NOTHING`, userID, listingID)
+	return err
+}
+
+// Unsave toglie l'annuncio dai preferiti dell'utente; se non c'era non cambia nulla.
+func (s *Store) Unsave(ctx context.Context, userID string, listingID int) error {
+	_, err := s.db.Exec(ctx, `DELETE FROM roomdate_app.saved_listings WHERE user_id = $1 AND listing_id = $2`, userID, listingID)
+	return err
+}
+
+// IsSaved indica se l'annuncio è tra i preferiti dell'utente.
+func (s *Store) IsSaved(ctx context.Context, userID string, listingID int) (bool, error) {
+	var saved bool
+	err := s.db.QueryRow(ctx, `
+        SELECT EXISTS (SELECT 1 FROM roomdate_app.saved_listings WHERE user_id = $1 AND listing_id = $2)`,
+		userID, listingID).Scan(&saved)
+	return saved, err
+}
+
+// SavedCursor è la posizione di un preferito nell'elenco: quando è stato salvato e l'annuncio.
+type SavedCursor struct {
+	SavedAt   time.Time
+	ListingID int
+}
+
+// SavedRow è un annuncio tra i preferiti, con il momento in cui è stato salvato.
+type SavedRow struct {
+	Row
+	SavedAt time.Time
+}
+
+// SavedListings restituisce una pagina dei preferiti dell'utente, dal più recente. Gli annunci che
+// non vedrebbe nella ricerca (disattivati, rimossi, di un account sospeso o bloccato) non compaiono,
+// ma restano salvati: se tornano visibili riappaiono.
+func (s *Store) SavedListings(ctx context.Context, userID string, after *SavedCursor, limit int) ([]SavedRow, error) {
+	var afterTime *time.Time
+	afterID := 0
+	if after != nil {
+		afterTime, afterID = &after.SavedAt, after.ListingID
+	}
+	rows, err := s.db.Query(ctx, `
+        SELECT `+rowColumns+`, true, sl.created_at
+        FROM roomdate_app.saved_listings sl
+        JOIN roomdate_app.listings l ON l.id = sl.listing_id
+        LEFT JOIN roomdate_app.users u ON l.user_id = u.id
+        WHERE sl.user_id = $1
+          AND `+visibleToViewer("$1::text")+`
+          AND ($2::timestamptz IS NULL OR (sl.created_at, sl.listing_id) < ($2::timestamptz, $3))
+        ORDER BY sl.created_at DESC, sl.listing_id DESC
+        LIMIT $4`, userID, afterTime, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []SavedRow
+	for rows.Next() {
+		var saved SavedRow
+		saved.Row, err = scanRow(rows, &saved.SavedAt)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, saved)
+	}
+	return result, rows.Err()
+}
+
+// CityCount è il numero di annunci visibili in una città.
+type CityCount struct {
+	City  string `json:"city"`
+	Count int    `json:"count"`
+}
+
+// SitemapEntry è un annuncio visibile a tutti, per la mappa del sito.
+type SitemapEntry struct {
+	ID        int
+	UpdatedAt time.Time
+}
+
+// Sitemap restituisce gli annunci che vede anche chi non ha fatto l'accesso, dal più aggiornato.
+func (s *Store) Sitemap(ctx context.Context, limit int) ([]SitemapEntry, error) {
+	rows, err := s.db.Query(ctx, `
+        SELECT l.id, l.updated_at
+        FROM roomdate_app.listings l
+        LEFT JOIN roomdate_app.users u ON l.user_id = u.id
+        WHERE `+visibleToViewer("''")+`
+        ORDER BY l.updated_at DESC, l.id DESC
+        LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[SitemapEntry])
+}
+
+// Cities restituisce le città con almeno un annuncio visibile a chi guarda, dalla più ricca.
+func (s *Store) Cities(ctx context.Context, viewerID string, limit int) ([]CityCount, error) {
+	rows, err := s.db.Query(ctx, `
+        SELECT l.city, count(*)::int
+        FROM roomdate_app.listings l
+        LEFT JOIN roomdate_app.users u ON l.user_id = u.id
+        WHERE `+visibleToViewer("$1")+`
+        GROUP BY l.city
+        ORDER BY count(*) DESC, l.city
+        LIMIT $2`, viewerID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowToStructByPos[CityCount])
+}

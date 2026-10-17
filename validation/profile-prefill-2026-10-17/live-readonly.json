@@ -1,0 +1,18 @@
+[
+  {
+    "path": "/api/v1/health",
+    "status": 200
+  },
+  {
+    "path": "/api/v1/auth/session",
+    "status": 200
+  },
+  {
+    "path": "/api/v1/listings?mine=1&demo=0",
+    "status": 401
+  },
+  {
+    "path": "/?qa=1&v=30",
+    "status": 200
+  }
+]

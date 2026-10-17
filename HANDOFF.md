@@ -8,6 +8,19 @@
 
 须区分本地提交、GitHub已同步与Sites已上线。尚未push的提交要明确记录，不能称为远端备份；Sites发布必须的源码同步不计为GitHub日常同步。本轮规则调整先本地提交，留到下一批GitHub同步。
 
+## 当前状态：v30个人资料预填（2026-10-17）
+
+线上：<https://yiqizu-guiyang.coppershark1.chatgpt.site/?v=30>，public。Sites源提交`3ac11a0faad3a787d6932d086591f0f4b84febfe`，版本`appgprj_6acf3606f92881919e76f18dea03390e~appgver_9bfe24d27e6881918d0265f4f97118cf`，部署`appgdep_6ad301a1219c8191abf4f405ec703758`返回succeeded，环境revision1。
+
+- 快速发布带入昵称、职业、性别、预算、入住时间、同城区域、室友期待及微信/电话；求租才带住房偏好/已保存租住时长。完整发布补相关描述和时长。个人介绍仍从“我的”统一展示，不复制成房子描述。
+- 当前手填、主动清空、草稿及编辑中的原帖优先，登录后只补空白；发布范围、成年/公开声明、房源权限不自动确认。本人上传的资料头像可复用或替换，后台只取当前认证账号头像，客户端URL不能指定别人头像；编辑保留原头像。
+- 草稿按账号与发布类型分开；旧版未标账号的全局草稿不自动导入已登录账号，匿名同类型仍可恢复，登录前当前表单内容保留；已登录打开不会删除未明归属旧草稿。详见报告，不将本机分键存储称为加密隔离。
+- 无新迁移，仍0000–0010。20组本地检查通过（17 API/业务、2 React SSR、1字段合并单元），构建/类型检查通过。完整浏览器登录后的交互及实体手机尚未验证。报告与日志：validation/profile-prefill-2026-10-17.md及同名目录。工作树/workspace/qa/yiqizu-profile-prefill。
+- 按最新规则，本轮本地commit并写handoff，未单独push GitHub。待推包含9498f03规则修订、7936a91/v29归档及本次v30提交；准确列表用git log origin/main..HEAD --oneline。GitHub远端仍a699641，不能把Sites源push说成GitHub同步。
+- 真实运营资料、发信配置与实际收件、微信/抖音实机仍待完成；保持受控内测和付款关闭。
+
+以下v29及更早章节为历史记录，最新状态以v30为准。
+
 ## 当前状态：v29房东/中介最小流程（2026-10-17）
 
 已在新环境恢复并重新验证上一轮未提交的改动，现已发布v29。线上：<https://yiqizu-guiyang.coppershark1.chatgpt.site/?v=29>，public。Sites源码`057ae64f0289f0a081c72b4a82d26f948f1c8301`；版本`appgprj_6acf3606f92881919e76f18dea03390e~appgver_513c6293c6088191a86d4cec1b98e217`，部署`appgdep_6ad2fc46cf048191b784d30920591917`返回succeeded，环境revision1。

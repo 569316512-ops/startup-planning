@@ -1,0 +1,1 @@
+PASS: housing persistence and validation, required photos (test source remains private), upload consent/type checks, photo ownership, image deletion on withdrawal; authenticated intake, one contact, idempotency, operator access, private contacts, stage updates, consent/age/free-text move-in/city validation, receipt withdrawal, test-data exclusion.

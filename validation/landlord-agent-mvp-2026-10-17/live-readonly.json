@@ -1,0 +1,24 @@
+[
+  {
+    "path": "/api/v1/health",
+    "status": 200
+  },
+  {
+    "path": "/api/v1/service-info",
+    "status": 200,
+    "passwordResetAvailable": false
+  },
+  {
+    "path": "/api/v1/listings?demo=0",
+    "status": 200,
+    "total": 3
+  },
+  {
+    "path": "/api/v1/admin/feedback",
+    "status": 401
+  },
+  {
+    "path": "/?qa=1&v=29",
+    "status": 200
+  }
+]

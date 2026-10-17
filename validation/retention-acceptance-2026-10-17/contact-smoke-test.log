@@ -1,0 +1,6 @@
+PASS: anonymous disclosure denied; logged-in viewer receives explicitly authorized contact
+PASS: regular and pilot contacts share the same daily quota
+PASS: receipt-controlled opt out/re-enable; private contacts denied; five distinct publishers/day; repeats allowed
+PASS: previous-day views do not consume today’s slots
+PASS: inactive and expired pilot listings hidden consistently
+PASS: withdrawn contact unavailable even to a previous viewer

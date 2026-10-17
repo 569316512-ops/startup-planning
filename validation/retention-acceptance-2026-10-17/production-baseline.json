@@ -1,0 +1,52 @@
+[
+  {
+    "path": "/",
+    "status": "200",
+    "exit": 0
+  },
+  {
+    "path": "/?view=profile",
+    "status": "200",
+    "exit": 0
+  },
+  {
+    "path": "/?view=help",
+    "status": "200",
+    "exit": 0
+  },
+  {
+    "path": "/api/v1/health",
+    "status": "200",
+    "exit": 0
+  },
+  {
+    "path": "/api/v1/service-info",
+    "status": "200",
+    "exit": 0
+  },
+  {
+    "path": "/api/v1/listings?demo=0",
+    "status": "200",
+    "exit": 0
+  },
+  {
+    "path": "/api/v1/pilot/admin",
+    "status": "403",
+    "exit": 0
+  },
+  {
+    "path": "/api/v1/admin/feedback",
+    "status": "401",
+    "exit": 0
+  },
+  {
+    "path": "/api/v1/me",
+    "status": "404",
+    "exit": 0
+  },
+  {
+    "path": "/api/v1/membership/qr/wechat",
+    "status": "404",
+    "exit": 0
+  }
+]

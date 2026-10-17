@@ -1,0 +1,90 @@
+[
+  {
+    "test": "pilot-upload-guard-test",
+    "exit": 0
+  },
+  {
+    "test": "profile-edit-test",
+    "exit": 0
+  },
+  {
+    "test": "post-edit-photos-test",
+    "exit": 0
+  },
+  {
+    "test": "detail-content-test",
+    "exit": 0
+  },
+  {
+    "test": "seeker-amenities-test",
+    "exit": 0
+  },
+  {
+    "test": "min-lease-test",
+    "exit": 0
+  },
+  {
+    "test": "member-quota-test",
+    "exit": 0
+  },
+  {
+    "test": "explore-feedback-test",
+    "exit": 0
+  },
+  {
+    "test": "smoke-test",
+    "exit": 0
+  },
+  {
+    "test": "contact-smoke-test",
+    "exit": 0
+  },
+  {
+    "test": "pilot-smoke-test",
+    "exit": 0
+  },
+  {
+    "test": "member-smoke-test",
+    "exit": 0
+  },
+  {
+    "test": "member-race-test",
+    "exit": 0
+  },
+  {
+    "test": "contact-day-test",
+    "exit": 0
+  },
+  {
+    "test": "mvp-safety-test",
+    "exit": 0
+  },
+  {
+    "test": "landlord-agent-test",
+    "exit": 0
+  },
+  {
+    "test": "profile-avatar-test",
+    "exit": 0
+  },
+  {
+    "test": "business-render-test",
+    "exit": 0
+  },
+  {
+    "test": "profile-prefill-render-test",
+    "exit": 0
+  },
+  {
+    "test": "profile-prefill-test",
+    "exit": 0
+  },
+  {
+    "test": "password-recovery-test",
+    "exit": 0
+  },
+  {
+    "test": "pilot-retention-test",
+    "exit": 0
+  }
+]

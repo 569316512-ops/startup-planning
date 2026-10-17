@@ -8,6 +8,18 @@
 
 须区分本地提交、GitHub已同步与Sites已上线。尚未push的提交要明确记录，不能称为远端备份；Sites发布必须的源码同步不计为GitHub日常同步。本轮规则调整先本地提交，留到下一批GitHub同步。
 
+## 当前状态：v31半年保留与整体验收（2026-10-17）
+
+线上：<https://yiqizu-guiyang.coppershark1.chatgpt.site/?v=31>，public。Sites源提交`1400bff28fe8ef3b2007e3e2ac088c4f8e593f4e`；版本`appgprj_6acf3606f92881919e76f18dea03390e~appgver_58c935fe8f78819188b676e43d945ccc`；部署`appgdep_6ad3335f069c81918c21e4fb13e47cde`返回succeeded，环境revision1。
+
+- 登记保留半年，按北京时间六自然月计算。超过30天仍进入运营列表，超过半年停止公开展示，并在后续成功登记后台任务或运营访问时清理登记和关联R2照片；没有定时任务。运营仍最多显示200条，7天指标不变。旧版已清理的数据不能恢复。
+- 全部登记展示/编辑/联系/照片及本机回执期限同步；照片跟随登记，而非按上传时间误删。孤立照片24小时，统计和联系访问记录30天期限保留。账户、普通完整帖子、聊天不在本轮清理范围。移除城市首轮验证提示，更新发布/运营/隐私文案。
+- 23组本地脚本、构建、类型检查通过；生产10项HTTP检查符合预期。详见[整体验收报告](validation/retention-acceptance-2026-10-17.md)及同名日志目录。没有新增浏览器交互或实体手机测试。
+- 验收结论：小范围10–20人受控试用有条件通过，大范围推广暂不通过。线上仍无公开主体/客服邮箱，真实找回邮件未启用；微信/抖音/小红书手机落地和全流程待验收。付款继续关闭。需用户提供可公开真实运营信息和发信配置，不自动公开登录邮箱。
+- 无新迁移，仍0000–0010。源码工作树/workspace/qa/yiqizu-retention-acceptance；Sites release main已同步。GitHub按每日2–3批约定，本轮只本地commit，未单独push。待推包括9498f03、7936a91、e4afc33及本轮提交；准确清单用git log origin/main..HEAD --oneline。当前GitHub远端仍a699641，不能称本轮已远端备份。
+
+以下v30及更早章节为历史记录，最新状态以v31为准。
+
 ## 当前状态：v30个人资料预填（2026-10-17）
 
 线上：<https://yiqizu-guiyang.coppershark1.chatgpt.site/?v=30>，public。Sites源提交`3ac11a0faad3a787d6932d086591f0f4b84febfe`，版本`appgprj_6acf3606f92881919e76f18dea03390e~appgver_9bfe24d27e6881918d0265f4f97118cf`，部署`appgdep_6ad301a1219c8191abf4f405ec703758`返回succeeded，环境revision1。

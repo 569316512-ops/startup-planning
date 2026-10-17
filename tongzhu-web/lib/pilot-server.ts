@@ -1,3 +1,4 @@
+import {pilotRetentionCutoff} from './pilot-retention';
 import {profileAvatar} from './profile-prefill';
 import {isBusinessHousing,publisherLabel} from './publisher';
 import {pilotUploadGuard} from './pilot-write-guard';
@@ -25,7 +26,7 @@ export async function handlePilot(request:Request,user:Row|null,db:DB):Promise<R
   const timestamp=()=>new Date().toISOString();
   const bucket=(env as unknown as {BUCKET:R2Bucket}).BUCKET;
   const removeUploads=async(rows:Row[])=>{for(const row of rows){ensure(bucket,'照片存储暂不可用',503);await bucket.delete(row.object_key);await db.run('DELETE FROM pilot_uploads WHERE id=?',row.id)}};
-  const cleanup=async()=>{const cutoff=new Date(Date.now()-30*86400000).toISOString(),orphanCutoff=new Date(Date.now()-86400000).toISOString();await removeUploads(await db.all('SELECT id,object_key FROM pilot_uploads WHERE created_at<? OR (created_at<? AND NOT EXISTS (SELECT 1 FROM pilot_leads WHERE pilot_leads.receipt_hash=pilot_uploads.receipt_hash))',cutoff,orphanCutoff));await db.run('DELETE FROM pilot_leads WHERE created_at<?',cutoff);await db.run('DELETE FROM pilot_events WHERE created_at<?',cutoff);await db.run('DELETE FROM contact_views WHERE created_at<?',cutoff)};
+  const cleanup=async()=>{const cutoff=pilotRetentionCutoff(),orphanCutoff=new Date(Date.now()-86400000).toISOString();await removeUploads(await db.all('SELECT id,object_key FROM pilot_uploads WHERE EXISTS (SELECT 1 FROM pilot_leads WHERE pilot_leads.receipt_hash=pilot_uploads.receipt_hash AND pilot_leads.created_at<?) OR (created_at<? AND NOT EXISTS (SELECT 1 FROM pilot_leads WHERE pilot_leads.receipt_hash=pilot_uploads.receipt_hash))',cutoff,orphanCutoff));await db.run('DELETE FROM pilot_leads WHERE created_at<?',cutoff);const analyticsCutoff=new Date(Date.now()-30*86400000).toISOString();await db.run('DELETE FROM pilot_events WHERE created_at<?',analyticsCutoff);await db.run('DELETE FROM contact_views WHERE created_at<?',analyticsCutoff)};
   const operator=()=>{const owner=(env as unknown as {PILOT_OWNER_EMAIL?:string}).PILOT_OWNER_EMAIL;ensure(user?.role==='admin'||(owner&&request.headers.get('oai-authenticated-user-id')&&request.headers.get('oai-authenticated-user-email')?.toLowerCase()===owner.toLowerCase()),'运营看板仅项目负责人可访问，请使用负责人账号登录',403)};
   if(path==='uploads'&&method==='POST'){
    await db.throttle(user?'pilot-upload-user:'+user.id:'pilot-upload:'+request.headers.get('cf-connecting-ip'),user?400:40,3600);const form=await request.formData();const receiptToken=form.get('receiptToken');ensure(tokenOK(receiptToken)&&tokenOK(form.get('sessionId')),'上传凭证无效');ensure(form.get('adult')==='true'&&form.get('consent')==='true','请确认年龄及照片使用范围');const receiptHash=await db.sha(String(receiptToken));ensure(!await db.first('SELECT id FROM pilot_leads WHERE receipt_hash=?',receiptHash),'本次登记已提交，请勿重复上传');
@@ -33,7 +34,7 @@ export async function handlePilot(request:Request,user:Row|null,db:DB):Promise<R
   }
   const publicPhotoRoute=path.match(/^photos\/public\/([a-zA-Z0-9-]+)$/);
   if(publicPhotoRoute&&method==='GET'){
-   const visibility=pilotAudience(user?.id,'l');const row=await db.first("SELECT u.* FROM pilot_uploads u JOIN pilot_leads l ON l.receipt_hash=u.receipt_hash WHERE u.id=? AND (EXISTS (SELECT 1 FROM json_each(l.photo_ids) WHERE value=u.id) OR l.avatar='/api/v1/pilot/photos/public/'||u.id) AND l.source<>'test' AND json_extract(l.housing,'$.public')=1 AND l.status NOT IN ('invalid','matched') AND l.created_at>=?"+visibility.clause,publicPhotoRoute[1],new Date(Date.now()-30*86400000).toISOString(),...visibility.args);ensure(row,'照片不存在',404);ensure(bucket,'照片存储暂不可用',503);const object=await bucket.get(row!.object_key);ensure(object,'照片不存在',404);return new Response(object!.body,{headers:{'Content-Type':row!.content_type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
+   const visibility=pilotAudience(user?.id,'l');const row=await db.first("SELECT u.* FROM pilot_uploads u JOIN pilot_leads l ON l.receipt_hash=u.receipt_hash WHERE u.id=? AND (EXISTS (SELECT 1 FROM json_each(l.photo_ids) WHERE value=u.id) OR l.avatar='/api/v1/pilot/photos/public/'||u.id) AND l.source<>'test' AND json_extract(l.housing,'$.public')=1 AND l.status NOT IN ('invalid','matched') AND l.created_at>=?"+visibility.clause,publicPhotoRoute[1],pilotRetentionCutoff(),...visibility.args);ensure(row,'照片不存在',404);ensure(bucket,'照片存储暂不可用',503);const object=await bucket.get(row!.object_key);ensure(object,'照片不存在',404);return new Response(object!.body,{headers:{'Content-Type':row!.content_type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
   }
   const photoRoute=path.match(/^photos\/([a-zA-Z0-9-]+)$/);
   if(photoRoute&&method==='GET'){
@@ -47,7 +48,7 @@ export async function handlePilot(request:Request,user:Row|null,db:DB):Promise<R
   }
   const editRoute=path.match(/^leads\/([a-zA-Z0-9-]+)\/content$/);
   let editingLead:Row|null=null;
-  if(editRoute){ensure(user,'请先登录后管理帖子',401);editingLead=await db.first("SELECT * FROM pilot_leads WHERE id=? AND user_id=? AND source<>'test' AND json_extract(housing,'$.public')=1 AND status NOT IN ('invalid','matched') AND created_at>=?",editRoute[1],user!.id,new Date(Date.now()-30*86400000).toISOString());ensure(editingLead,'帖子不存在或不能修改',404);
+  if(editRoute){ensure(user,'请先登录后管理帖子',401);editingLead=await db.first("SELECT * FROM pilot_leads WHERE id=? AND user_id=? AND source<>'test' AND json_extract(housing,'$.public')=1 AND status NOT IN ('invalid','matched') AND created_at>=?",editRoute[1],user!.id,pilotRetentionCutoff());ensure(editingLead,'帖子不存在或不能修改',404);
    if(method==='GET'){const row=editingLead!,h=JSON.parse(row.housing);return response({id:row.id,updatedAt:row.updated_at,data:{city:row.city,district:row.district,kind:row.kind,title:row.title,gender:row.gender,budget:String(row.budget),moveIn:row.move_in,minLeaseMonths:row.min_lease_months===null?'':String(row.min_lease_months),preferredGender:row.preferred_gender,note:row.note,coRentalRules:row.co_rental_rules,roommateExpectations:row.roommate_expectations,nickname:row.nickname,occupation:row.occupation,contactType:row.contact_type,contact:row.contact_value,contactVisibility:row.contact_visibility},housing:{...h,bedrooms:String(h.bedrooms||2),bathrooms:String(h.bathrooms||1),area:String(h.area||''),roomsAvailable:String(h.roomsAvailable||1)},photoIds:JSON.parse(row.photo_ids),avatar:row.avatar});}
    if(method==='DELETE'){await removeUploads(await db.all('SELECT id,object_key FROM pilot_uploads WHERE receipt_hash=?',editingLead!.receipt_hash));await db.run('DELETE FROM pilot_leads WHERE id=? AND user_id=?',editingLead!.id,user!.id);return response({ok:true});}
    ensure(method==='PUT','操作不支持',405);
@@ -75,7 +76,7 @@ export async function handlePilot(request:Request,user:Row|null,db:DB):Promise<R
   const contactRoute=path.match(/^leads\/([a-zA-Z0-9-]+)\/contact$/);
   if(contactRoute&&method==='POST'){
    ensure(user,'请先登录后查看联系方式',401);
-   const cutoff=new Date(Date.now()-30*86400000).toISOString(),visibility=pilotAudience(user!.id);
+   const cutoff=pilotRetentionCutoff(),visibility=pilotAudience(user!.id);
    const row=await db.first("SELECT * FROM pilot_leads WHERE id=? AND source<>'test' AND json_extract(housing,'$.public')=1 AND created_at>=? AND status NOT IN ('invalid','matched')"+visibility.clause,contactRoute[1],cutoff,...visibility.args);
    ensure(row,'帖子不存在或已撤回',404);ensure(row!.contact_visibility==='members','发布者未开放直接联系，联系方式仅运营可见',403);
    ensure(await recordContactView(request,user!.id,row!.contact_type+':'+row!.contact_value,db),'今日查看额度已用完（普通账号5人，会员50人）；已查看的可重复查看，可前往会员页了解',429);

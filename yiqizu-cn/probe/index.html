@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+ <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="referrer" content="no-referrer">
+ <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https://yiqizu-mvp-test-d4fa3kk6dc43ea64.api.tcloudbasegateway.com https://tcb-api.tencentcloudapi.com https://tcb-auth.tencentcloudapi.com; img-src 'self' data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'">
+ <title>一起租 · CloudBase能力验证</title><link rel="stylesheet" href="./probe.css">
+</head>
+<body><main>
+ <p class="eyebrow">一起租 · 开发验证</p><h1>确认国内版的基础能力</h1>
+ <p>只测试一个隔离事务和一张1px虚构图片。本页不是正式产品，也不能证明所有大陆网络均可访问。</p>
+ <p class="notice">令牌只由 WorkBuddy 在本机生成并配置。不要发到聊天、截图或分享报告；请勿在不可信设备上输入。</p>
+ <form id="probe"><label for="token">本机探针令牌</label><input id="token" type="password" autocomplete="off" spellcheck="false" maxlength="64" required><button id="run" type="submit">运行一次验证</button></form>
+ <p id="status" role="status">运行前确认目标环境、免费套餐、专用私有桶和SQL已配置；每次运行都有资源消耗。</p>
+ <h2>可分享的脱敏结果</h2><button id="copy" type="button" disabled>复制报告</button><pre id="result"></pre>
+ <p>若出现失败，不要开放数据库或存储公共读写。将报告交回排查。普通账号权限与资源额度需要另外记录。</p>
+</main><script type="module" src="./probe.js"></script></body></html>

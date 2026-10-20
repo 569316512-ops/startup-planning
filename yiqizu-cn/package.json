@@ -1,0 +1,23 @@
+{
+  "name": "yiqizu-cn",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=22.13"},
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build:probe": "node scripts/build-functions.mjs",
+    "package:probe": "node scripts/package-probe.mjs"
+  },
+  "dependencies": {
+    "@cloudbase/js-sdk": "3.10.3",
+    "@cloudbase/node-sdk": "3.18.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}

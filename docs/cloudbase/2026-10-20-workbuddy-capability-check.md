@@ -2,7 +2,7 @@
 
 日期：2026-10-20。目标环境：`yiqizu-mvp-test-d4fa3kk6dc43ea64`，上海。
 
-状态：后续验证说明，尚未执行。设计见 `docs/superpowers/specs/2026-10-20-cloudbase-h5-design.md`。本文件不要求重建环境、购买资源或迁移旧用户数据。
+状态：探针源码和本地验证已完成，真实云端验证尚未执行。请使用实际交付包内`DEPLOY.md`（源码`yiqizu-cn/probe/DEPLOY.md`）执行；本文件是能力边界参考，不替代包内精确步骤。设计见 `docs/superpowers/specs/2026-10-20-cloudbase-h5-design.md`。不重建环境、不购买资源、不迁移旧用户数据。
 
 ## 首先只读确认
 

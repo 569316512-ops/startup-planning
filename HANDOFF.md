@@ -8,17 +8,19 @@
 
 须区分本地提交、GitHub已同步与Sites已上线。尚未push的提交要明确记录，不能称为远端备份；Sites发布必须的源码同步不计为GitHub日常同步。本轮规则调整先本地提交，留到下一批GitHub同步。
 
-## 最新工作：CloudBase 国内 H5 实施计划（2026-10-20）
+## 最新工作：CloudBase 国内 H5 能力探针交付（2026-10-20）
 
-用户已选择低成本精简国内 H5，已实名并通过 WorkBuddy 创建环境，提供报告后要求继续，并已回复“按设计继续”确认书面设计。当前已完成迁移设计、能力验证交接和实施计划，尚未开发国内版、建表、配置密钥或部署云函数。原 Sites v31 继续作为现有线上版本。
+用户已选择低成本精简国内 H5，已实名并通过 WorkBuddy 创建环境，已确认设计、计划及Native执行。当前Phase A本地探针源码、SQL、验证和部署包完成；尚未在真实CloudBase建表、配置密钥或部署云函数，也未开始国内版完整业务。原Sites v31及CloudBase根测试页保持原样。
 
 - 国内环境：`yiqizu-mvp-test-d4fa3kk6dc43ea64`，上海。测试页地址：<https://yiqizu-mvp-test-d4fa3kk6dc43ea64-1509110788.tcloudbaseapp.com/>。此前HTTP读取成功，用户反馈页面正常展示；不能推断所有国内运营商/微信/抖音均验收通过。
 - WorkBuddy 的 2026-10-20 控制台报告称：PostgreSQL、免费体验至2027-04-19 23:59:59，不自动续费，每月共享3,000资源点，超额停服；默认域名仅开发/小范围测试用途。当前执行环境没有腾讯云授权，费用、权限与能力需部署时复核，不把免费体验说成可免费大规模推广。
 - 设计文件：[国内H5迁移设计](docs/superpowers/specs/2026-10-20-cloudbase-h5-design.md)。拟独立`yiqizu-cn/` React/Vite静态前端、SDK调用Node云函数、服务端PostgreSQL/RPC和受控云存储。保留登录、资料预填、快速发布/浏览/修改/撤回、联系授权/额度和运营反馈；暂不迁移收藏/聊天/会员/支付/AI。账号及数据首轮独立，历史数据另案，不自动复制旧站用户或照片。
-- [WorkBuddy能力验证说明](docs/cloudbase/2026-10-20-workbuddy-capability-check.md)列出只读核查与之后隔离探针的边界；不是已发出的外部任务，也没有可部署探针源码。PG事务、签名上传、函数限制和角色权限必须在真实环境验证，不能凭控制台菜单存在宣称通过。
-- [实施计划](docs/superpowers/plans/2026-10-20-cloudbase-h5.md)已拆为9个任务、3个阶段：先交付独立能力探针并取得真实云端结果，再做账号/PG事务/照片/清理及精简界面，最后打包和预览验收。计划内所有任务尚未开始；明确真实PG并发测试、匿名直连拒绝、上传不可覆写、断网幂等与前端交互证据。
-- 下一步：用户审阅实施计划并确认执行方式（建议本会话主代理逐步实现），再依执行技能创建隔离工作树和开发探针。真实云端探针需用户转交给WorkBuddy执行；没有通过记录不能推进整个业务实现。设计审阅已完成；writing-plans要求的计划审阅/执行方式确认尚未完成。
-- 本轮仅本地文档commit，未push GitHub，未改变Sites或CloudBase资源，未产生云端费用。待推包括此前9498f03、7936a91、e4afc33、5225499、cba0cb5及本轮计划提交；准确清单用`git log origin/main..HEAD --oneline`。
+- 探针源码在`yiqizu-cn/`，[部署说明](yiqizu-cn/probe/DEPLOY.md)，包通过`npm run build:probe && npm run package:probe`生成至忽略目录release。SDK锁定Web3.10.3/Node3.18.7，函数入口`index.main`对应CommonJS index.js；仅health/令牌保护prepare/verify，不泄漏原始SDK异常。
+- 34项本地测试、类型检查通过，其中6项真实PostgreSQL（隔离Docker、无网络、不暴露端口）。独立审查4项重要问题已修复回归：入口解析、真实x-upsert覆写请求、结构化权限拒绝、删除后明确对象不存在。1项Minor暂缓：中途异常导出报告诊断信息有限，需WorkBuddy附脱敏错误码。详见[能力探针验收记录](validation/cloudbase-capability-2026-10-20.md)。
+- [实施计划](docs/superpowers/plans/2026-10-20-cloudbase-h5.md)Task 1前4步本地完成，最后的真实SDK/PG/存储/普通账号权限及资源点证据仍待WorkBuddy；不能标记整个Task 1完成，Task 2–9未开始。设计和计划审阅已完成，不再询问重复批准。
+- 下一步：用户将实际验证包交给WorkBuddy，按包内DEPLOY.md只用已有免费环境部署至`/cn-preview/`并返回脱敏JSON及普通登录用户/资源额度补证，得到真实平台通过后才继续Phase B。当前没有腾讯云认证能力，不用其他账号绕过。
+- 已在隔离工作树`.worktrees/cloudbase-h5`、分支`feat/cloudbase-h5`开发并提交35ee476、da90692；同一计划执行记录留在该工作树`.superpowers/sdd/2026-10-20-cloudbase-h5/`，真实平台任务未完成前保留它以便恢复。缺失技能辅助脚本按手工日志替代，Web SDK类型不支持rpc的访客负向测试采用官方PostgREST接口；代价和证据详见报告。
+- 本轮只做本地源码commit，未push GitHub，未改变Sites或CloudBase资源。待推包含此前未同步提交及本轮探针/交接；准确清单用`git log origin/main..HEAD --oneline`。源代码完成不等于网站上线，Sites源仓库没有本轮改动。
 
 ## 当前线上状态：v31半年保留与整体验收（2026-10-17）
 

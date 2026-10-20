@@ -8,7 +8,7 @@
 
 **Tech Stack:** React、TypeScript、Vite、CloudBase Web/Node SDK、PostgreSQL、Vitest、React Testing Library；SQL 集成测试使用真正 PostgreSQL 和测试用 `pg` 驱动。开发 Node >=22.13，云函数运行时与 SDK 版本在 Task 1 验证后锁定，不虚构可用版本。
 
-**Spec:** `docs/superpowers/specs/2026-10-20-cloudbase-h5-design.md`（用户已于本轮回复“按设计继续”确认）。
+**Spec:** `docs/superpowers/specs/2026-10-20-cloudbase-h5-design.md`（用户已回复“按设计继续”确认）。用户已回复“计划确认，直接执行”，采用Native执行。
 
 ## Global Constraints
 
@@ -63,10 +63,10 @@
 
 **Interfaces:** `handleProbe(input:unknown,deps:ProbeDeps):Promise<ApiResult<ProbeReport>>`；`ProbeDeps`提供`authorize(token:string):boolean`、`takeSlot(runId:string):Promise<boolean>`、`probeStorage(runId:string):Promise<StorageReport>`。`ProbeReport`只含通过/失败/未执行、版本、限制及脱敏请求ID；`StorageReport={uploaded:boolean;readable:boolean;deleted:boolean}`。业务适配接口`rpc<T>(name:string,params:Record<string,unknown>):Promise<T>`和`StoragePort`在Task 5消费。
 
-- [ ] 写`rejects_missing_probe_token`（401且依赖未调用）、`rejects_path_traversal_run_id`（400）、`does_not_return_secrets_or_signed_urls`（报告无token/APIKey/签名）、`reports_unsupported_capability_as_failure`，并运行`npm test -- tests/probe.test.ts`观察预期失败。
-- [ ] 核对官方SDK文档和实际类型，锁定Web/Node SDK依赖。实现仅允许health和受保护探针操作；`PROBE_TOKEN`只由WorkBuddy在云函数环境配置，浏览器手输后仅驻留内存。云函数包装输出统一`ApiResult`，无通用SQL/对象路径入口。
-- [ ] 编写`cn_probe_`隔离SQL和`takeSlot`RPC（同runId并发一次true、一次false），显式拒绝PUBLIC/anon/authenticated直接访问。存储仅在`cn-probe/<runId>/`写虚构1px图片，限制对象并验证读取/删除；不能签名时报告unsupported，不开启公共桶。
-- [ ] 运行上述测试、`npm run typecheck`、`npm run build:probe`，生成仅探针静态页/函数/SQL及SHA256清单；检查没有旧站代码、密钥、node_modules、本地数据库和构建缓存混入。通过后提交`feat: add isolated CloudBase capability probe`。
+- [x] 写`rejects_missing_probe_token`（401且依赖未调用）、`rejects_path_traversal_run_id`（400）、`does_not_return_secrets_or_signed_urls`（报告无token/APIKey/签名）、`reports_unsupported_capability_as_failure`，并运行`npm test -- tests/probe.test.ts`观察预期失败。
+- [x] 核对官方SDK文档和实际类型，锁定Web/Node SDK依赖。实现仅允许health和受保护探针操作；`PROBE_TOKEN`只由WorkBuddy在云函数环境配置，浏览器手输后仅驻留内存。云函数包装输出统一`ApiResult`，无通用SQL/对象路径入口。
+- [x] 编写`cn_probe_`隔离SQL和`takeSlot`RPC（同runId并发一次true、一次false），显式拒绝PUBLIC/anon/authenticated直接访问。存储仅在`cn-probe/<runId>/`写虚构1px图片，限制对象并验证读取/删除；不能签名时报告unsupported，不开启公共桶。
+- [x] 运行上述测试、`npm run typecheck`、`npm run build:probe`，生成仅探针静态页/函数/SQL及SHA256清单；检查没有旧站代码、密钥、node_modules、本地数据库和构建缓存混入。通过后提交`feat: add isolated CloudBase capability probe`。
 - [ ] 将明确包和指令交给用户转给WorkBuddy。真实环境SDK调用、PG事务、匿名权限拒绝和安全照片链路全部有证据后才勾选Task 1完成。云端未执行/失败时，停在Phase A，记录阻塞，不能先开发整套业务再补平台验证。
 
 **平台证据输出：** `validation/cloudbase-capability-2026-10-20.md`记录真实运行时、SDK版本、角色名/授予范围、输入输出限制、资源点变化及测试请求ID；不得附密钥和带签名URL。如果真实角色或签名接口不同于预期，仅在本任务修正适配并重测；需付费/架构改向则先报告用户。
@@ -175,5 +175,5 @@
 
 - 设计§1–3目标/环境/架构→Task 1/7/9；§4–5功能/账号权限→Task 2/3/4/7/8；§6数据与并发→Task 2/4；§7图片/清理→Task 5/6；§8旧站与发布→Task 1/9；§9验收→Task 1–9；§10能力门槛→Task 1。
 - Review Focus五类已逐项分配测试；共同接口与任务引用已核对。未知平台能力只在Task 1验证，不用占位“已支持”继续业务。
-- 当前仅计划文件；各任务均未开始，未安装依赖、创建产品代码、建表或部署。
-- 执行建议：本会话由主代理逐任务实施（Native），减少频繁交接成本；按执行技能在阶段末安排审阅。用户也可明确选择分代理实现/审阅。计划须用户审阅并确认执行方式后实施，不把设计批准当作对尚不存在计划的提前批准。
+- 用户已确认计划及Native执行。Task 1本地代码、SQL、34项测试、独立审查修正和部署包完成；真实云端结果待WorkBuddy，因此该任务整体未完成。Task 2–9尚未开始，未在CloudBase建表、配置密钥或部署。
+- 完整本地证据及未完成项见`validation/cloudbase-capability-2026-10-20.md`。待收到真实环境报告后从Task 1最后一步恢复，不重新编写已完成探针，也不越过平台门槛进入Phase B。

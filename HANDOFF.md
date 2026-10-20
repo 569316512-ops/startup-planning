@@ -1,6 +1,6 @@
 # 一起租项目交接文档
 
-更新时间：2026-10-17（Asia/Shanghai）
+更新时间：2026-10-20（Asia/Shanghai）
 
 ## 长期交付约定（2026-10-17修订，以本条为准）
 
@@ -8,7 +8,18 @@
 
 须区分本地提交、GitHub已同步与Sites已上线。尚未push的提交要明确记录，不能称为远端备份；Sites发布必须的源码同步不计为GitHub日常同步。本轮规则调整先本地提交，留到下一批GitHub同步。
 
-## 当前状态：v31半年保留与整体验收（2026-10-17）
+## 最新工作：CloudBase 国内 H5 迁移设计（2026-10-20）
+
+用户已选择低成本精简国内 H5，已实名并通过 WorkBuddy 创建环境，提供报告后要求继续。当前只完成迁移书面设计和能力验证交接说明，尚未开发国内版、建表、配置密钥或部署云函数。原 Sites v31 继续作为现有线上版本。
+
+- 国内环境：`yiqizu-mvp-test-d4fa3kk6dc43ea64`，上海。测试页地址：<https://yiqizu-mvp-test-d4fa3kk6dc43ea64-1509110788.tcloudbaseapp.com/>。此前HTTP读取成功，用户反馈页面正常展示；不能推断所有国内运营商/微信/抖音均验收通过。
+- WorkBuddy 的 2026-10-20 控制台报告称：PostgreSQL、免费体验至2027-04-19 23:59:59，不自动续费，每月共享3,000资源点，超额停服；默认域名仅开发/小范围测试用途。当前执行环境没有腾讯云授权，费用、权限与能力需部署时复核，不把免费体验说成可免费大规模推广。
+- 设计文件：[国内H5迁移设计](docs/superpowers/specs/2026-10-20-cloudbase-h5-design.md)。拟独立`yiqizu-cn/` React/Vite静态前端、SDK调用Node云函数、服务端PostgreSQL/RPC和受控云存储。保留登录、资料预填、快速发布/浏览/修改/撤回、联系授权/额度和运营反馈；暂不迁移收藏/聊天/会员/支付/AI。账号及数据首轮独立，历史数据另案，不自动复制旧站用户或照片。
+- [WorkBuddy能力验证说明](docs/cloudbase/2026-10-20-workbuddy-capability-check.md)列出只读核查与之后隔离探针的边界；不是已发出的外部任务，也没有可部署探针源码。PG事务、签名上传、函数限制和角色权限必须在真实环境验证，不能凭控制台菜单存在宣称通过。
+- 下一步：用户审阅具体设计后编写实施计划，再执行隔离能力探针、业务代码、验证及预览部署。当前使用brainstorming架构流程，设计文件审阅门槛尚未完成，不把“继续”当作对不存在文档的事先审阅。
+- 本轮仅本地文档commit，未push GitHub，未改变Sites或CloudBase资源，未产生云端费用。待推包括此前9498f03、7936a91、e4afc33、5225499及本轮文档提交；准确清单用`git log origin/main..HEAD --oneline`。
+
+## 当前线上状态：v31半年保留与整体验收（2026-10-17）
 
 线上：<https://yiqizu-guiyang.coppershark1.chatgpt.site/?v=31>，public。Sites源提交`1400bff28fe8ef3b2007e3e2ac088c4f8e593f4e`；版本`appgprj_6acf3606f92881919e76f18dea03390e~appgver_58c935fe8f78819188b676e43d945ccc`；部署`appgdep_6ad3335f069c81918c21e4fb13e47cde`返回succeeded，环境revision1。
 

@@ -20,7 +20,8 @@
 - [实施计划](docs/superpowers/plans/2026-10-20-cloudbase-h5.md)Task 1前4步本地完成，最后的真实SDK/PG/存储/普通账号权限及资源点证据仍待WorkBuddy；不能标记整个Task 1完成，Task 2–9未开始。设计和计划审阅已完成，不再询问重复批准。
 - 下一步：用户将实际验证包交给WorkBuddy，按包内DEPLOY.md只用已有免费环境部署至`/cn-preview/`并返回脱敏JSON及普通登录用户/资源额度补证，得到真实平台通过后才继续Phase B。当前没有腾讯云认证能力，不用其他账号绕过。
 - 已在隔离工作树`.worktrees/cloudbase-h5`、分支`feat/cloudbase-h5`开发并提交35ee476、da90692；同一计划执行记录留在该工作树`.superpowers/sdd/2026-10-20-cloudbase-h5/`，真实平台任务未完成前保留它以便恢复。缺失技能辅助脚本按手工日志替代，Web SDK类型不支持rpc的访客负向测试采用官方PostgREST接口；代价和证据详见报告。
-- 本轮只做本地源码commit，未push GitHub，未改变Sites或CloudBase资源。待推包含此前未同步提交及本轮探针/交接；准确清单用`git log origin/main..HEAD --oneline`。源代码完成不等于网站上线，Sites源仓库没有本轮改动。
+- 本阶段已于2026-10-20集中push GitHub，从远端a699641快进到9567e1c，包含此前待推文档/v29/v30/v31和本次探针、审查修正。此交接状态随同一同步批次追加提交；最终核对`git ls-remote origin refs/heads/main`与`git rev-parse HEAD`一致，不能把GitHub源码备份称为CloudBase/Sites上线。Sites源仓库本轮无改动。
+- 可转交包：`/workspace/outputs/yiqizu-cloudbase-probe.tar.gz`，约251KiB；SHA256为`4f890ab9e726f73095f6456e6b5f581e458fc2664fb6871f8a3d28764862a5b9`，BUILD.json来源为9567e1c。包内11文件校验通过；修正后独立生产安装和按index.main模块解析的health/401验证通过。下载受限时WorkBuddy可从GitHub已同步源码的`yiqizu-cn/`按README构建，不公开私有仓库或发送凭证。
 
 ## 当前线上状态：v31半年保留与整体验收（2026-10-17）
 

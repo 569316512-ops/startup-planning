@@ -66,4 +66,6 @@ PostgreSQL为本地`postgres:17-alpine`隔离容器，数据库`yiqizu_test_prob
 
 Minor暂缓：浏览器当前步骤抛异常时，导出JSON可能仍标`not-run`且没有详细失败原因；页面显示通用错误，WorkBuddy需要附上本机脱敏错误码。影响排查效率，不会把该步骤误标通过。未为此额外扩大修正范围。
 
-本地代码提交：`35ee476`初版、`da90692`审查修正；最终包的BUILD.json记录其实际构建来源，归档及逐文件SHA256另行提供。GitHub留待集中同步，云端证据仍需返回。
+代码提交：`35ee476`初版、`da90692`审查修正；2026-10-20已集中push至GitHub的`9567e1c`（包括此前待推阶段）。此状态记录随本批后续文档提交，最终以远端HEAD核对为准。CloudBase/Sites未部署，云端证据仍需返回。
+
+交付包`/workspace/outputs/yiqizu-cloudbase-probe.tar.gz`来源为9567e1c，SHA256为`4f890ab9e726f73095f6456e6b5f581e458fc2664fb6871f8a3d28764862a5b9`。修正后的最终包重新解压、11文件SHA验证、干净生产依赖安装以及按`index.main`模块stem的health/401验证通过。生成产物不进GitHub；无法转交tar时，可从已同步源码按README构建。

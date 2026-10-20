@@ -6,12 +6,13 @@ const runId='9e47ce03-8407-485b-b318-385650505ca8';
 const path=`cn-probe/${runId}/pixel.png`;
 const pixel=new Uint8Array(Buffer.from(PIXEL_BASE64,'base64'));
 function bucket(){
- const b:ProbeStorageBucket={
+ let removed=false;
+ const b:ProbeStorageBucket & {exists:(path:string)=>Promise<{data:boolean;error:null}>}={
   createSignedUploadUrl:async(p)=>({data:{path:p,token:'scoped-token',fullSignedURL:'https://example.invalid/upload'},error:null}),
-  info:async()=>({data:{size:pixel.length,contentType:'image/png'},error:null}),
+  info:async()=>removed?{data:null,error:{status:404,code:'NoSuchKey'}}:({data:{size:pixel.length,contentType:'image/png'},error:null}),
   download:async()=>({data:new Blob([pixel]),error:null}),
   createSignedUrl:async()=>({data:{fullSignedURL:'https://example.invalid/read'},error:null}),
-  remove:async()=>({data:[{name:path}],error:null}),
+  remove:async()=>{removed=true;return {data:[{name:path}],error:null}},
   exists:async()=>({data:false,error:null}),
  };
  return b;
@@ -47,7 +48,13 @@ describe('cloud probe adapters',()=>{
   await expect(verifyProbeStorage(bucket(),runId,async()=>new Response('denied',{status:403}))).rejects.toThrow();
  });
  it('delete_ack_without_object_disappearing_does_not_pass',async()=>{
-  const b=bucket();b.exists=async()=>({data:true,error:null});
+  const b=bucket();b.info=async()=>({data:{size:pixel.length,contentType:'image/png'},error:null});
+  const report=await verifyProbeStorage(b,runId,async()=>new Response(pixel));
+  expect(report.deleted).toBe(false);
+ });
+ it('invalid_jwt_after_delete_is_not_proof_of_object_deletion',async()=>{
+  const b=bucket();let reads=0;
+  b.info=async()=>++reads===1?{data:{size:pixel.length,contentType:'image/png'},error:null}:{data:null,error:{status:400,statusCode:'InvalidJWT'}};
   const report=await verifyProbeStorage(b,runId,async()=>new Response(pixel));
   expect(report.deleted).toBe(false);
  });

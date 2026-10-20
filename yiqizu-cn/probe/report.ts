@@ -1,15 +1,6 @@
 import {ENV_ID} from '../shared/contracts';
 export type CheckState='passed'|'failed'|'not-run';
-export function permissionDenied(error:unknown):boolean{
- if(!error||typeof error!=='object')return false;
- const e=error as Record<string,unknown>;
- return e.code==='42501'||e.status===403||e.statusCode===403;
-}
-export function signedUploadDenied(error:unknown):boolean{
- if(!error||typeof error!=='object')return false;
- const e=error as Record<string,unknown>;
- return permissionDenied(e)||[400,401,409].includes(Number(e.status??e.statusCode));
-}
+export {permissionDenied,signedUploadDenied,postgresDeniedResponse,privateObjectDeniedResponse} from '../shared/provider-errors';
 export function publicReport(input:{runId:string;checks:Record<string,CheckState>;requestIds:string[];[key:string]:unknown}){
  const checks=Object.fromEntries(Object.entries(input.checks).filter(([key,value])=>/^[A-Za-z]+$/.test(key)&&['passed','failed','not-run'].includes(value)));
  return {

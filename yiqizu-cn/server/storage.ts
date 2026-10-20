@@ -1,4 +1,5 @@
 import {PIXEL_BASE64,type StorageReport,type UploadGrant} from '../shared/contracts';
+import {objectNotFound} from '../shared/provider-errors';
 type Result<T>={data:T|null;error:unknown};
 export type ProbeStorageBucket={
  createSignedUploadUrl:(path:string,options:{upsert:boolean})=>Promise<Result<{path:string;token:string;fullSignedURL:string}>>;
@@ -6,7 +7,6 @@ export type ProbeStorageBucket={
  download:(path:string)=>PromiseLike<Result<Blob>>;
  createSignedUrl:(path:string,seconds:number)=>Promise<Result<{fullSignedURL:string}>>;
  remove:(paths:string[])=>Promise<Result<unknown>>;
- exists:(path:string)=>Promise<Result<boolean>>;
 };
 const fixture=Buffer.from(PIXEL_BASE64,'base64');
 const pathFor=(id:string)=>{
@@ -37,6 +37,7 @@ export async function verifyProbeStorage(bucket:ProbeStorageBucket,runId:string,
  if(!(await readSmallResponse(raw)).equals(fixture))throw new Error('SIGNED_READ_MISMATCH');
  const removed=await bucket.remove([path]);
  if(removed.error)throw new Error('DELETE_FAILED');
- const remains=await bucket.exists(path);
- return {uploaded:true,readable:true,deleted:!remains.error&&remains.data===false};
+ // SDK exists() converts even invalid-JWT HTTP400 into false. Preserve metadata errors instead.
+ const remains=await bucket.info(path);
+ return {uploaded:true,readable:true,deleted:remains.data===null&&objectNotFound(remains.error)};
 }

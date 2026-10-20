@@ -8,7 +8,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const stage=await mkdtemp(path.join(tmpdir(),'yiqizu-probe-package-'));
 const copies=[
  ['dist/static/index.html','static/index.html'],['dist/static/probe.js','static/probe.js'],['dist/static/probe.css','static/probe.css'],
- ['dist/functions/yiqizu-capability-probe/index.cjs','functions/yiqizu-capability-probe/index.cjs'],
+ ['dist/functions/yiqizu-capability-probe/index.js','functions/yiqizu-capability-probe/index.js'],
  ['dist/functions/yiqizu-capability-probe/package.json','functions/yiqizu-capability-probe/package.json'],
  ['dist/functions/yiqizu-capability-probe/package-lock.json','functions/yiqizu-capability-probe/package-lock.json'],
  ['probe/schema.sql','sql/schema.sql'],['probe/DEPLOY.md','DEPLOY.md'],['scripts/verify-package.mjs','VERIFY.mjs'],

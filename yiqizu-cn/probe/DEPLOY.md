@@ -19,7 +19,7 @@
 ## 2. 配置并部署探针函数
 
 1. 查重函数名 `yiqizu-capability-probe`；已存在则停止，不覆盖。只使用普通云函数的当前免费资源，不切换计费产品。
-2. 在本机函数目录 `functions/yiqizu-capability-probe/` 执行 `npm ci --omit=dev --ignore-scripts --no-audit --no-fund`。依赖和锁文件已提供；缺网/安装失败时报告，不擅自升级SDK。上传运行依赖，入口 `index.main`（文件`index.cjs`；如控制台入口只识别index.js，报告限制，不盲改源码）。Node运行时选实际支持的>=20版本，内存256MB、超时60秒（仅当免费套餐支持，不调整付费配额）。
+2. 在本机函数目录 `functions/yiqizu-capability-probe/` 执行 `npm ci --omit=dev --ignore-scripts --no-audit --no-fund`。依赖和锁文件已提供；缺网/安装失败时报告，不擅自升级SDK。上传运行依赖，入口 `index.main`，文件为CommonJS的`index.js`且package.json声明`type:commonjs`。Node运行时选实际支持的>=20版本，内存256MB、超时60秒（仅当免费套餐支持，不调整付费配额）。
 3. 在本机生成32字节随机值并转64位小写hex，作为`PROBE_TOKEN`；只存本机私有记录和云函数环境变量，别打印到对话。设置`CLOUDBASE_ENV_ID=yiqizu-mvp-test-d4fa3kk6dc43ea64`和服务端`CLOUDBASE_APIKEY`，API Key只存函数配置，不放静态页。
 4. 仅允许指定探针函数被SDK访客调用，保留数据库/敏感RPC权限拒绝。允许匿名登录及当前测试域名调用，但不开放整个环境的匿名函数访问；若平台只能全局开放，请停下报告。
 5. 不配置公开HTTP转发、不修改站点根目录。未授权请求和`health`不访问数据库和存储，不能用health成功代替完整探针。

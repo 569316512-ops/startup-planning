@@ -1,6 +1,7 @@
 import cloudbase from '@cloudbase/js-sdk';
 import {ENV_ID,PROBE_BUCKET,PROBE_FUNCTION,PIXEL_BASE64,type ApiResult,type ProbeReport} from '../shared/contracts';
-import {permissionDenied,signedUploadDenied,publicReport,type CheckState} from './report';
+import {permissionDenied,signedUploadDenied,postgresDeniedResponse,privateObjectDeniedResponse,publicReport,type CheckState} from './report';
+import {attemptProbeOverwrite} from './overwrite';
 
 const form=document.querySelector<HTMLFormElement>('#probe')!;
 const input=document.querySelector<HTMLInputElement>('#token')!;
@@ -43,9 +44,9 @@ form.addEventListener('submit',async e=>{
   const {accessToken}=await app.auth().getAccessToken();
   const gateway=`https://${ENV_ID}.api.tcloudbasegateway.com/v1/rdb/rest`;
   const table=await fetch(`${gateway}/cn_probe_slots?select=run_id&limit=1`,{headers:{Authorization:`Bearer ${accessToken}`}});
-  checks.anonymousTableDenied=permissionDenied({status:table.status})?'passed':'failed';
+  checks.anonymousTableDenied=await postgresDeniedResponse(table)?'passed':'failed';
   const rpc=await fetch(`${gateway}/rpc/cn_probe_take_slot`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({p_run_id:runId})});
-  checks.anonymousRpcDenied=permissionDenied({status:rpc.status})?'passed':'failed';
+  checks.anonymousRpcDenied=await postgresDeniedResponse(rpc)?'passed':'failed';
   const bucket=app.storage.from(PROBE_BUCKET);
   const bytes=Uint8Array.from(atob(PIXEL_BASE64),c=>c.charCodeAt(0));
   const file=new Blob([bytes],{type:'image/png'});
@@ -55,13 +56,14 @@ form.addEventListener('submit',async e=>{
   // A valid token must not authorize a different object or overwriting the verified object.
   const wrong=await bucket.uploadToSignedUrl(`cn-probe/${runId}/other.png`,prepared.grant.token,file,{contentType:'image/png',upsert:false});
   checks.wrongPathDenied=signedUploadDenied(wrong.error)?'passed':'failed';
-  const replay=await bucket.uploadToSignedUrl(prepared.grant.path,prepared.grant.token,file,{contentType:'image/png',upsert:true});
+  const changed=new Blob([bytes,new Uint8Array([0])],{type:'image/png'});
+  const replay=await attemptProbeOverwrite(bucket,prepared.grant.path,prepared.grant.token,changed);
   checks.replayDenied=signedUploadDenied(replay.error)?'passed':'failed';
   const anon=await bucket.download(prepared.grant.path);
   checks.anonymousStorageDenied=permissionDenied(anon.error)?'passed':'failed';
   const publicUrl=bucket.getPublicUrl(prepared.grant.path).data.publicUrl;
   const publicRead=await fetch(publicUrl,{credentials:'omit',cache:'no-store',redirect:'error'});
-  checks.publicStorageDenied=[403,404].includes(publicRead.status)?'passed':'failed';
+  checks.publicStorageDenied=await privateObjectDeniedResponse(publicRead)?'passed':'failed';
   status.textContent='正在由服务端核验1px测试图片、短期读取并删除…';
   await call('verify');checks.storageReadAndDelete='passed';
   status.textContent=Object.values(checks).includes('failed')?'存在失败项目，请交回报告；不要放开公共权限。':'自动探针已运行。普通账号权限、真实额度和平台限制仍需WorkBuddy核查。';

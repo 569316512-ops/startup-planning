@@ -18,3 +18,7 @@ node_modules/
 
 # Nested repository metadata stays local
 **/.git/
+
+# Isolated implementation worktrees and per-plan execution records
+.worktrees/
+.superpowers/

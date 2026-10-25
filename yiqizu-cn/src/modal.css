@@ -1,0 +1,1 @@
+.modal-backdrop{position:fixed;inset:0;background:#29203680;display:flex;align-items:center;justify-content:center;padding:18px;z-index:30}.modal{background:#fff;border-radius:20px;width:min(100%,600px);max-height:90dvh;overflow:auto;box-shadow:0 20px 80px #241b3b40}.modal>.panel{border:0;margin:0}.modal>.text-button{float:right;margin:8px}.modal .stack{clear:both}

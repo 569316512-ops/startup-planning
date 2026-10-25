@@ -10,6 +10,11 @@
     "test": "vitest run",
     "test:pg": "node scripts/run-pg-tests.mjs",
     "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "build:api": "node scripts/build-api.mjs",
+    "package:preview": "node scripts/package-release.mjs",
+    "release": "node scripts/release.mjs",
+    "dev": "vite",
     "build:probe": "node scripts/build-functions.mjs",
     "package:probe": "node scripts/package-probe.mjs"
   },
@@ -20,14 +25,14 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@testing-library/react": "16.3.2",
+    "@testing-library/react": "16.3.3",
     "@types/node": "22.19.19",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "esbuild": "0.28.2",
-    "jsdom": "27.4.0",
+    "jsdom": "30.1.3",
     "typescript": "5.9.3",
-    "vite": "7.3.1",
+    "vite": "8.3.5",
     "vitest": "5.0.5"
   }
 }

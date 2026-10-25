@@ -1,6 +1,24 @@
-# 一起租国内版：能力验证阶段
+# 一起租国内H5：受控预览候选
 
-这是已批准迁移计划Task 1的独立探针，不是正式国内产品。现有Sites v31未改变；账号、帖子、聊天、付费等业务未迁移。
+2026-10-25：已实现独立账号/资料预填、两类发帖/修改/撤回、公开浏览与筛选、授权联系/免费额度、私有图片、运营/反馈/统计及半年清理。UI为React/Vite，业务云函数`yiqizu-api`使用服务端PostgREST；浏览器不直读业务表。原Sites v31及云端根测试页保持不变，国内版使用独立新账号/数据。
+
+本地新建隔离PostgreSQL从零迁移0001–0005，107项测试（39项真实PG）与类型/构建/打包检查通过。尚未云端业务部署或真机验收。免费函数3秒、默认测试域名、首次SDK约209KiB gzip仍是实测关注项；完整部署说明见[WorkBuddy部署说明](docs/deploy-workbuddy.md)。
+
+```sh
+npm ci --ignore-scripts
+npm run typecheck
+npm run build
+npm run build:api
+npm run package:preview
+```
+
+生成`release/yiqizu-cn-preview.tar.gz`（不含密钥/node_modules）。包内`node VERIFY.mjs`核验文件完整性，不代表云端功能通过。开发用`npm run dev`，base固定`/cn-preview/`。完整发布验证命令`TEST_DATABASE_URL=docker://yiqizu-probe-pg-<数字>/yiqizu_test_<name> CN_PROBE_PG_CONTAINER=yiqizu-probe-pg-<数字> npm run release`只接受本地隔离容器；没有显式fixture就拒绝，不假装跳过PG检查仍可发布。
+
+管理员不能按未核验邮箱自动开通。注册一律普通用户，用户在本机登录自己的运营账号并确认UUID/邮箱后，通过控制台精确授权；撤权同时撤销会话。不要将密码、API Key、会话或签名URL发进对话。
+
+## 历史：独立能力探针
+
+以下为计划Task1独立探针说明；平台实测及收尾记录在根validation/cloudbase-capability-2026-10-25.md。probe v2新增JSON返回适配仍需云端复验；不恢复已吊销凭据。聊天/付费不在国内MVP范围内。
 
 ```sh
 npm ci --ignore-scripts

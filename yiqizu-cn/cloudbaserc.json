@@ -1,0 +1,5 @@
+{
+ "envId":"yiqizu-mvp-test-d4fa3kk6dc43ea64",
+ "functionRoot":"dist/functions",
+ "functions":[{"name":"yiqizu-api","handler":"index.main","runtime":"Nodejs20.19","memorySize":256,"timeout":3}]
+}

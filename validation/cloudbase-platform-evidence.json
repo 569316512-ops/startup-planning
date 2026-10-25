@@ -1,0 +1,10 @@
+{
+  "environmentId":"yiqizu-mvp-test-d4fa3kk6dc43ea64",
+  "capabilityGate":"passed-equivalent-real-calls",
+  "source":"https://workbuddy.link/p/Jkd8AIeev3Gb8vJXotXyIk",
+  "evidenceType":"user-relayed-external-report",
+  "adapterCloudRetestPending":true,
+  "businessCloudVerified":false,
+  "realPhoneVerified":false,
+  "limitations":["3s function timeout; measured cold start2664ms","default test domain","no 1024-byte bucket enforcement","scalar RPC false needs JSON or REST"]
+}

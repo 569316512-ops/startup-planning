@@ -22,8 +22,8 @@ describe.skipIf(!pgConfigured)('real core PostgreSQL schema',()=>{
   }
  });
  it('reapplying_migration_preserves_existing_data',()=>{
-  const before=sql('SELECT count(*) FROM cn_users;');sql(readFileSync('migrations/0001_core.sql','utf8'));
-  expect(sql('SELECT count(*) FROM cn_users;')).toBe(before);expect(sql('SELECT count(*) FROM cn_migrations;')).toBe('1');
+  const before=sql('SELECT count(*) FROM cn_users;'),versions=sql('SELECT count(*) FROM cn_migrations;');sql(readFileSync('migrations/0001_core.sql','utf8'));
+  expect(sql('SELECT count(*) FROM cn_users;')).toBe(before);expect(sql('SELECT count(*) FROM cn_migrations;')).toBe(versions);
  });
  it('rejects_bad_session_upload_and_feedback_constraints',()=>{
   expect(failure("INSERT INTO cn_sessions(token_hash,user_id,expires_at) VALUES('raw-secret',gen_random_uuid(),now())")).toMatch(/23514|23503/);

@@ -33,4 +33,12 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.cn_probe_take_slot(uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.cn_probe_take_slot(uuid) TO service_role;
+
+-- Object return avoids node-sdk 3.18.7 converting scalar false to {}.
+CREATE FUNCTION public.cn_probe_take_slot_v2(p_run_id uuid)
+RETURNS jsonb LANGUAGE sql SECURITY INVOKER
+SET search_path=pg_catalog,public
+AS $$ SELECT jsonb_build_object('taken',public.cn_probe_take_slot(p_run_id)); $$;
+REVOKE ALL ON FUNCTION public.cn_probe_take_slot_v2(uuid) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.cn_probe_take_slot_v2(uuid) TO service_role;
 COMMIT;

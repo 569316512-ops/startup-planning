@@ -11,6 +11,15 @@ function command(sql:string){
 const env={...process.env};for(const k of ['DOCKER_HOST','DOCKER_CONTEXT','DOCKER_TLS','DOCKER_TLS_VERIFY','DOCKER_CERT_PATH'])delete env[k];
 function sql(query:string){return execFileSync('docker',command(query),{env,encoding:'utf8',stdio:['ignore','pipe','pipe']})}
 describe.skipIf(!container)('real isolated PostgreSQL probe',()=>{
+ it('v2_returns_json_and_serializes_the_concurrent_last_slot',async()=>{
+  const id=randomUUID(),q=`SET ROLE service_role; SELECT public.cn_probe_take_slot_v2('${id}'::uuid);`;
+  const results=await Promise.all([invoke('docker',command(q),{env}),invoke('docker',command(q),{env})]);
+  expect(results.map(r=>JSON.parse(r.stdout.trim().split('\n').at(-1)!).taken).sort()).toEqual([false,true]);
+ });
+ it.each(['anon','authenticated'])('denies_%s_v2_rpc_execution',role=>{
+  let state='';try{sql(`SET ROLE ${role}; SELECT public.cn_probe_take_slot_v2('${randomUUID()}'::uuid);`)}catch(e){state=String((e as {stderr:unknown}).stderr)}
+  expect(state).toContain('42501');
+ });
  it('allows_exactly_one_concurrent_last_slot',async()=>{
   const id=randomUUID(),q=`SET ROLE service_role; SELECT public.cn_probe_take_slot('${id}'::uuid);`;
   const results=await Promise.all([invoke('docker',command(q),{env}),invoke('docker',command(q),{env})]);

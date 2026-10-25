@@ -11,7 +11,7 @@ const copies=[
  ['dist/functions/yiqizu-capability-probe/index.js','functions/yiqizu-capability-probe/index.js'],
  ['dist/functions/yiqizu-capability-probe/package.json','functions/yiqizu-capability-probe/package.json'],
  ['dist/functions/yiqizu-capability-probe/package-lock.json','functions/yiqizu-capability-probe/package-lock.json'],
- ['probe/schema.sql','sql/schema.sql'],['probe/DEPLOY.md','DEPLOY.md'],['scripts/verify-package.mjs','VERIFY.mjs'],
+ ['probe/schema.sql','sql/schema.sql'],['probe/upgrade-v2.sql','sql/upgrade-v2.sql'],['probe/DEPLOY.md','DEPLOY.md'],['scripts/verify-package.mjs','VERIFY.mjs'],
 ];
 for(const [src,dst] of copies){await mkdir(path.dirname(path.join(stage,dst)),{recursive:true});await copyFile(path.join(root,src),path.join(stage,dst))}
 try{await copyFile(path.join(root,'dist/static/probe.js.LEGAL.txt'),path.join(stage,'static/probe.js.LEGAL.txt'))}catch(e){if(e.code!=='ENOENT')throw e}

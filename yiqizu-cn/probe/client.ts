@@ -45,7 +45,7 @@ form.addEventListener('submit',async e=>{
   const gateway=`https://${ENV_ID}.api.tcloudbasegateway.com/v1/rdb/rest`;
   const table=await fetch(`${gateway}/cn_probe_slots?select=run_id&limit=1`,{headers:{Authorization:`Bearer ${accessToken}`}});
   checks.anonymousTableDenied=await postgresDeniedResponse(table)?'passed':'failed';
-  const rpc=await fetch(`${gateway}/rpc/cn_probe_take_slot`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({p_run_id:runId})});
+  const rpc=await fetch(`${gateway}/rpc/cn_probe_take_slot_v2`,{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'},body:JSON.stringify({p_run_id:runId})});
   checks.anonymousRpcDenied=await postgresDeniedResponse(rpc)?'passed':'failed';
   const bucket=app.storage.from(PROBE_BUCKET);
   const bytes=Uint8Array.from(atob(PIXEL_BASE64),c=>c.charCodeAt(0));

@@ -18,9 +18,13 @@ function bucket(){
  return b;
 }
 describe('cloud probe adapters',()=>{
- it('only_accepts_boolean_transaction_results',async()=>{
-  expect(await takeProbeSlot({rpc:async()=>({data:true,error:null})},runId)).toBe(true);
-  await expect(takeProbeSlot({rpc:async()=>({data:'true',error:null})},runId)).rejects.toThrow();
+ it('accepts_explicit_json_true_and_false_without_sdk_falsy_coercion',async()=>{
+  for(const taken of [true,false])expect(await takeProbeSlot({rpc:async(name)=>{
+   expect(name).toBe('cn_probe_take_slot_v2');return {data:{taken},error:null};
+  }},runId)).toBe(taken);
+ });
+ it.each([{},true,false,{taken:'false'},null])('rejects_malformed_rpc_result_%j',async data=>{
+  await expect(takeProbeSlot({rpc:async()=>({data,error:null})},runId)).rejects.toThrow();
  });
  it('does_not_accept_provider_rpc_error_as_no_slot',async()=>{
   await expect(takeProbeSlot({rpc:async()=>({data:null,error:{code:'42501'}})},runId)).rejects.toThrow();

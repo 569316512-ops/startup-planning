@@ -216,7 +216,7 @@ export function App() {
       <p>{message || "正在读取帖子…"}</p>
     );
   else if (route.view === "publish-room" || route.view === "publish-seeker")
-    content = (
+    content = loading ? <p>正在恢复登录与草稿…</p> : (
       <IntakeForm
         key={route.view}
         kind={route.view === "publish-room" ? "room" : "seeker"}

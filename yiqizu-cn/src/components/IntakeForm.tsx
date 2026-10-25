@@ -36,6 +36,7 @@ const tags = [
   "门禁",
   "接受宠物",
 ];
+function initialDraft(kind:Kind,city:string):LeadDraft{return {kind,city,contactType:'wechat',preferredGender:'不限',gender:'不透露',photoIds:[],adult:false,consent:false,publicConsent:false,source:SOURCES.includes(new URLSearchParams(location.search).get('source') as typeof SOURCES[number])?new URLSearchParams(location.search).get('source')!:'direct',housing:kind==='room'?{housingState:'rented',bedrooms:2,bathrooms:1,roomsAvailable:1,amenities:[],originalLayout:false}:undefined};}
 export function IntakeForm({
   kind,
   city,
@@ -63,34 +64,9 @@ export function IntakeForm({
     completed = useRef(false);
   const [form, setForm] = useState<LeadDraft>(() =>
     mergeDraft({
-      current: {
-        kind,
-        city,
-        contactType: "wechat",
-        preferredGender: "不限",
-        gender: "不透露",
-        photoIds: [],
-        housing:
-          kind === "room"
-            ? {
-                housingState: "rented",
-                bedrooms: 2,
-                bathrooms: 1,
-                roomsAvailable: 1,
-                amenities: [],
-                originalLayout: false,
-              }
-            : undefined,
-        source: SOURCES.includes(
-          new URLSearchParams(location.search).get(
-            "source",
-          ) as (typeof SOURCES)[number],
-        )
-          ? new URLSearchParams(location.search).get("source")!
-          : "direct",
-      },
+      current: {...initialDraft(kind,city),...saved.current?.data},
       profile,
-      draft: saved.current?.data ?? null,
+      draft: null,
       editing,
       touched: touched.current,
     }),
@@ -102,28 +78,11 @@ export function IntakeForm({
   const [draftOwner, setDraftOwner] = useState(profile?.id ?? null);
   useEffect(() => {
     const nextOwner = profile?.id ?? null;
-    if (draftOwner && draftOwner !== nextOwner) {
-      const next = nextOwner ? loadDraft(draftKey(nextOwner, kind)) : null;
-      touched.current = new Set(next?.touched ?? []);
-      requestId.current = next?.requestId ?? crypto.randomUUID();
-      setForm(
-        mergeDraft({
-          current: {
-            kind,
-            city,
-            photoIds: [],
-            gender: "不透露",
-            preferredGender: "不限",
-            contactType: "wechat",
-          },
-          profile,
-          draft: next?.data ?? null,
-          editing,
-          touched: touched.current,
-        }),
-      );
-    } else if (!editing)
-      setForm((f) => fillProfileDefaults(f, profile, touched.current));
+    if (draftOwner !== nextOwner && (draftOwner || touched.current.size===0)) {
+      const next=nextOwner?loadDraft(draftKey(nextOwner,kind)):null;
+      touched.current=new Set(next?.touched??[]);requestId.current=next?.requestId??crypto.randomUUID();
+      setForm(mergeDraft({current:{...initialDraft(kind,city),...next?.data},profile,draft:null,editing,touched:touched.current}));
+    } else if(!editing) setForm(f=>fillProfileDefaults(f,profile,touched.current));
     setDraftOwner(nextOwner);
   }, [profile, editing, draftOwner, kind, city]);
   useEffect(() => {
@@ -581,7 +540,7 @@ export function IntakeForm({
                 clearDraft(key);
                 requestId.current = crypto.randomUUID();
                 touched.current.clear();
-                setForm({ kind, city, photoIds: [] });
+                setForm(initialDraft(kind,city));
                 setMessage("已清除草稿");
               }}
             >

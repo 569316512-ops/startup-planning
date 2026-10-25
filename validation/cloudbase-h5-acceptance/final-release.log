@@ -1,0 +1,35 @@
+
+> yiqizu-cn@0.1.0 release
+> node scripts/release.mjs
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 48 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/h5/index.html                      0.95 kB │ gzip:   0.58 kB
+dist/h5/assets/index-DYqOB-d-.css       8.42 kB │ gzip:   2.53 kB
+dist/h5/assets/index-Bvr0him7.js      271.52 kB │ gzip:  84.89 kB
+dist/h5/assets/index.esm-CP93hMaR.js  845.03 kB │ gzip: 209.08 kB
+
+✓ built in 509ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+Built yiqizu-api index.main; no deployment.
+
+ RUN  v5.0.5 /workspace/startup-planning/.worktrees/cloudbase-h5/yiqizu-cn
+
+
+ Test Files  25 passed (25)
+      Tests  111 passed (111)
+   Start at  16:50:43
+   Duration  34.12s (tests 86%, environment 11%, import 3%)
+
+    Isolate  25 workers spawned · ~230ms startup each (spawn + environment, per file)
+             at least ~5.51s faster with isolate: false — reuses workers across files instead of one per file
+
+Preview candidate packaged. NOT cloud/phone accepted. SHA256 8a5ce88b7523889b3b389c54fba9c599b2660cb1484271dd084a825e7eb24e8a
+Local verification passed. Candidate still requires WorkBuddy cloud and phone acceptance.

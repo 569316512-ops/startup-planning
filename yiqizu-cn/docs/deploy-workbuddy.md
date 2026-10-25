@@ -14,7 +14,7 @@ GitHub固定检出用户提供的已推送commit到新目录，不覆盖旧工�
 
 ## 数据库
 
-首次查重无业务表才按序执行`migrations/0001_core.sql`至`0005_operations_cleanup.sql`。每个文件整笔事务且在cn_migrations登记，不重置库；重复执行同版本不删除数据。出现角色缺失/SQL错误，停止并报告脱敏SQLSTATE，不给anon/authenticated加权限。实际迁移数量以包中排序文件为准。
+首次查重无业务表才按序执行`migrations/0001_core.sql`至`0006_review_safety.sql`。每个文件整笔事务且在cn_migrations登记，不重置库；重复执行同版本不删除数据。出现角色缺失/SQL错误，停止并报告脱敏SQLSTATE，不给anon/authenticated加权限。实际迁移数量以包中排序文件为准。
 
 核实9张业务表强制RLS，PUBLIC/anon/authenticated无直接权限；所有cn_敏感RPC仅service_role可执行。用有效匿名令牌和真实普通账号验证表、RPC、桶读写被拒绝，记录结构化错误码；未登录401/表不存在404不是权限证据。
 

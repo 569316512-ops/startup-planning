@@ -6,9 +6,10 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"],
     "strict": true,
+    "jsx": "react-jsx",
     "noEmit": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["shared/**/*.ts", "server/**/*.ts", "probe/**/*.ts", "tests/**/*.ts"]
+  "include": ["shared/**/*.ts", "server/**/*.ts", "probe/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx", "src/**/*.ts", "src/**/*.tsx"]
 }

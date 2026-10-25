@@ -1,6 +1,6 @@
 import {CITY_CONFIG} from './cities';
 import type {Gender,Housing,HousingState,LeadInput} from './business-contracts';
-export class InputError extends Error {constructor(public field:string){super(`请检查填写内容：${field}`)}}
+export class InputError extends Error {readonly status=400;constructor(public field:string){super(`请检查填写内容：${field}`)}}
 export function ensure(value:unknown,field:string):asserts value{if(!value)throw new InputError(field)}
 export function object(value:unknown):Record<string,unknown>{ensure(value&&typeof value==='object'&&!Array.isArray(value),'表单');return value as Record<string,unknown>}
 export function text(value:unknown,field:string,min=0,max=500):string{ensure(typeof value==='string',field);const s=value.trim();ensure(s.length>=min&&s.length<=max,field);return s}

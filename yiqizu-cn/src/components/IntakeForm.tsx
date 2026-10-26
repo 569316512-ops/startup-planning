@@ -172,7 +172,18 @@ export function IntakeForm({
           : "每天可发布3帖。草稿保存在当前浏览器，可清除。"}
         个人介绍在“我的”填写。
       </p>
+      <p role="status" aria-live="polite">{message}</p>
       <form
+        onInvalidCapture={(e) => {
+          e.preventDefault();
+          const first=Array.from(e.currentTarget.elements).find((element):element is HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement=>(element instanceof HTMLInputElement||element instanceof HTMLSelectElement||element instanceof HTMLTextAreaElement)&&!element.validity.valid);
+          if(!first)return;
+          const label=first.closest('label');
+          const name=label?Array.from(label.childNodes).filter(n=>n.nodeType===3).map(n=>n.textContent).join('').trim():'';
+          setMessage(`请填写或检查：${name||'标记的必填项'}`);
+          first.focus();
+          first.scrollIntoView?.({behavior:'smooth',block:'center'});
+        }}
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
@@ -548,7 +559,6 @@ export function IntakeForm({
             </button>
           )}
         </div>
-        <p role="status">{message}</p>
       </form>
     </section>
   );

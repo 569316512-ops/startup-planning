@@ -8,6 +8,10 @@ import type {PrivateLead} from '../shared/business-contracts';
 afterEach(()=>{cleanup();localStorage.clear()});
 const p={id:'account',nickname:'昵称',city:'贵阳',contact:{wechat:'',phone:''}} as Profile;
 const props={kind:'room' as const,city:'贵阳',onLogin:()=>{},onDone:()=>{}};
+it('opens_login_before_validating_an_empty_guest_form',()=>{
+ let opened=0;render(<IntakeForm {...props} kind="seeker" profile={null} onLogin={()=>{opened++}}/>);
+ fireEvent.click(screen.getByRole('button',{name:'登录后发布'}));expect(opened).toBe(1);
+});
 it('explains_native_validation_failure_and_focuses_first_invalid_field',()=>{
  render(<IntakeForm {...props} kind="seeker" profile={p}/>);
  const title=screen.getByLabelText('标题');fireEvent.invalid(title);

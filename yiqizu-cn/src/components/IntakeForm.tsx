@@ -534,7 +534,7 @@ export function IntakeForm({
           </label>
         ))}
         <div className="actions">
-          <button disabled={busy || uploadBusy}>
+          <button type={profile?'submit':'button'} onClick={()=>{if(!profile)onLogin()}} disabled={busy || uploadBusy}>
             {busy
               ? "正在提交…"
               : editing
